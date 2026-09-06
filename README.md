@@ -1,4 +1,4 @@
-# 🚀 PBSE Week 2 - Group Assignment
+# 🏸 PBSE Week 2 - Group Assignment
 
 Welcome to the repository for **Week 2 Group Assignment** in **Platform Based Software Engineering (PBSE)**.
 
