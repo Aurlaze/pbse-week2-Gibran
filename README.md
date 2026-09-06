@@ -18,6 +18,8 @@ This repository contains the codebase and deliverables developed during Week 2 o
 
 1. Muhammad Keenan Basyir
 2. Muhammad Gibran Basyir
+3. Aurelio Rafif Wicaksono
+4. Thomas Nadandra Aryawida
 
 ---
 
