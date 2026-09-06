@@ -40,7 +40,7 @@ info:
     ## Idempotency
 
     The Idempotency-Key header is required for booking requests, and its value must be a version-4 UUID with hyphens.
-    It’s required on POST /v1/bookings, because creating a badminton court booking is a consequential operation that must not happen twice.
+    Itâ€™s required on POST /v1/bookings, because creating a badminton court booking is a consequential operation that must not happen twice.
     Keys are kept for 24 hours. A key reused after that period is treated as new.
     The server returns 409 Conflict with the problem type https://api.example.com/problems/idempotency-key-reuse.
 
@@ -168,6 +168,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
@@ -202,7 +203,9 @@ paths:
       - name: courtId
         in: path
         required: true
-        schema: { type: string }
+        schema:
+          type: string
+          pattern: '^crt_[A-Za-z0-9]{3,}$'
         example: crt_51Fa93cD
     post:
       operationId: deactivateCourt
@@ -239,6 +242,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Retirement' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |
             The transition is not permitted from the current status.
@@ -286,7 +290,6 @@ components:
         isAvailable:
           type: boolean
           example: true
-            status:
         status:
           type: string
           enum: [active, retired]
@@ -343,7 +346,7 @@ components:
 
     Retirement:
       type: object
-      required: [thingId, reason, retiredAt]
+      required: [courtId, reason, retiredAt]
       properties:
         courtId:
           type: string
