@@ -1,5 +1,5 @@
 # =====================================================================
-#  STARTER SKELETON — Meeting 2, Lab L2
+#  STARTER SKELETON â€” Meeting 2, Lab L2
 #
 #  This file lints clean as it stands. That is its only purpose: to
 #  prove your toolchain works before you have anything to lose.
@@ -19,7 +19,7 @@ info:
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
   version: 0.1.0
   description: |
-    TODO: one sentence — what this service is for, and for whom.
+    TODO: one sentence â€” what this service is for, and for whom.
 
     ## Conventions
 
@@ -35,7 +35,7 @@ info:
 
     ## Idempotency
 
-    TODO: the four sentences from Worksheet W2 — header name and
+    TODO: the four sentences from Worksheet W2 â€” header name and
     format, which operations require it, the retention window as a
     number, and the behaviour on reuse with a different body.
 
@@ -46,13 +46,13 @@ info:
 
 servers:
   - url: https://api.example.com/v1
-    description: Production — does not exist yet. That is Meeting 3.
+    description: Production â€” does not exist yet. That is Meeting 3.
   - url: http://localhost:8080/v1
     description: Local development
 
 tags:
   - name: Things
-    description: TODO — rename to your primary resource.
+    description: TODO â€” rename to your primary resource.
 
 paths:
 
@@ -68,7 +68,7 @@ paths:
       tags: [Things]
       description: |
         TODO: the obligations live here, not in the summary. Say what
-        is included and what is not — for example, whether closed or
+        is included and what is not â€” for example, whether closed or
         inactive items appear in the list, so that clients can display
         them greyed out rather than silently omitting them.
       parameters:
@@ -121,7 +121,7 @@ paths:
       summary: Create a thing
       tags: [Things]
       description: |
-        TODO: replace with your domain's consequential operation — the
+        TODO: replace with your domain's consequential operation â€” the
         one that must not happen twice.
       parameters:
         - name: Idempotency-Key
@@ -144,7 +144,7 @@ paths:
       responses:
         '201':
           description: |
-            Created — or, on a retry with the same key and the same
+            Created â€” or, on a retry with the same key and the same
             body, the replayed original response.
           headers:
             Location:
@@ -153,7 +153,7 @@ paths:
               # Without this example the mock server serves the literal
               # word "string" in the header. Every example you omit is a
               # place where the mock stops being useful to a client
-              # developer — which is the whole point of having one.
+              # developer â€” which is the whole point of having one.
               example: /v1/things/thg_51Fa93cD
           content:
             application/json:
@@ -184,7 +184,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # -------------------------------------------------------------------
-  # Rule 5 — a state transition is a sub-resource, and its URI is a
+  # Rule 5 â€” a state transition is a sub-resource, and its URI is a
   # NOUN. Not /markRetired, not PATCH {"status":"retired"}.
   # -------------------------------------------------------------------
   /things/{thingId}/retirement:
@@ -201,7 +201,7 @@ paths:
       description: |
         TODO: your own transition. Note that the transition carries a
         body of its own (the reason), a response of its own (who and
-        when), and can be read back later with GET — none of which a
+        when), and can be read back later with GET â€” none of which a
         verb in the URI would give you.
 
         Re-sending this when the thing is ALREADY retired returns 200
@@ -277,7 +277,7 @@ components:
         amount:
           type: integer
           description: |
-            In the minor unit of currency. Never a decimal — see the
+            In the minor unit of currency. Never a decimal â€” see the
             conventions in info.description.
           example: 23000
         currency:
@@ -327,7 +327,7 @@ components:
       # RFC 9457 permits EXTENSION MEMBERS: your own fields alongside the
       # five below. They are what turns a merely correct error into an
       # interface a client can build a good experience on, and they are
-      # explicitly assessed in A1 — so the schema must allow them.
+      # explicitly assessed in A1 â€” so the schema must allow them.
       # Remove this line and your own extension members become lint
       # errors, which is exactly how a team ends up with useless errors.
       additionalProperties: true
@@ -377,7 +377,7 @@ components:
             status: 400
 
     NotFound:
-      description: No such resource — or none you may see.
+      description: No such resource â€” or none you may see.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
