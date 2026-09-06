@@ -1,10 +1,18 @@
 // service/src/store/bookings.js
+// The only place SQL is written for bookings and idempotency keys (A.7.4).
 
 const pool = require('./db');
 
+// The contract states keys are retained 24 hours, and that a key reused after
+// that window is treated as new. The window is applied here, in the lookup.
 async function checkIdempotencyKey(key) {
     const result = await pool.query(
-        `SELECT * FROM idempotency_keys WHERE key = $1`,
+        `
+        SELECT key, body_hash, response_status, response_body
+        FROM idempotency_keys
+        WHERE key = $1
+          AND created_at > now() - INTERVAL '24 hours'
+        `,
         [key]
     );
     return result.rows[0] || null;
@@ -15,9 +23,28 @@ async function saveIdempotencyKey(key, bodyHash, status, responseBody) {
         `
         INSERT INTO idempotency_keys (key, body_hash, response_status, response_body)
         VALUES ($1, $2, $3, $4)
+        ON CONFLICT (key) DO NOTHING
         `,
         [key, bodyHash, status, responseBody]
     );
+}
+
+// Backs the 409 court-slot-unavailable branch. Half-open intervals: a booking
+// ending exactly when another starts does not overlap.
+async function findOverlappingBooking(courtId, startTime, endTime) {
+    const result = await pool.query(
+        `
+        SELECT id
+        FROM bookings
+        WHERE court_id = $1
+          AND status = 'confirmed'
+          AND start_time < $3
+          AND end_time > $2
+        LIMIT 1
+        `,
+        [courtId, startTime, endTime]
+    );
+    return result.rows[0] || null;
 }
 
 async function createBooking(bookingId, courtId, startTime, endTime) {
@@ -35,5 +62,6 @@ async function createBooking(bookingId, courtId, startTime, endTime) {
 module.exports = {
     checkIdempotencyKey,
     saveIdempotencyKey,
+    findOverlappingBooking,
     createBooking
 };

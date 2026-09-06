@@ -14,12 +14,7 @@ router.get("/courts", async (req, res) => {
     const reEncoded = Buffer.from(decoded).toString("base64");
 
     if (reEncoded !== cursor || !/^crt_[A-Za-z0-9]{3,}$/.test(decoded)) {
-      return problem(
-        res,
-        400,
-        "Bad Request",
-        "Invalid cursor value"
-      );
+      return problem(res, 400, "malformed-request", { detail: "Invalid cursor value" });
     }
 
     decodedCursor = decoded;
@@ -35,23 +30,13 @@ router.get("/courts", async (req, res) => {
       parsedLimit < 1 ||
       parsedLimit > 100
     ) {
-      return problem(
-        res,
-        400,
-        "Bad Request",
-        "Invalid limit value"
-      );
+      return problem(res, 400, "malformed-request", { detail: "Invalid limit value" });
     }
   }
 
   // Validation
   if (status && !["active", "retired"].includes(status)) {
-    return problem(
-      res,
-      400,
-      "Bad Request",
-      "Invalid status value"
-    );
+    return problem(res, 400, "malformed-request", { detail: "Invalid status value" });
   }
 
   // Work
@@ -90,24 +75,14 @@ router.get("/courts/:courtId", async (req, res) => {
   const courtIdPattern = /^crt_[A-Za-z0-9]{3,}$/;
 
   if (!courtIdPattern.test(courtId)) {
-    return problem(
-      res,
-      400,
-      "Bad Request",
-      "Invalid courtId format"
-    );
+    return problem(res, 400, "malformed-request", { detail: "Invalid courtId format" });
   }
 
   // Work
   const court = await findCourtById(courtId);
 
   if (!court) {
-    return problem(
-      res,
-      404,
-      "Not Found",
-      "Court not found"
-    );
+    return problem(res, 404, "not-found", { detail: "Court not found" });
   }
 
   // Representation
