@@ -4,7 +4,7 @@ Welcome to the repository for **Week 2 Group Assignment** in **Platform Based So
 
 ---
 
-## 📌 Project Overview
+## Project Overview
 
 This repository contains the codebase and deliverables developed during Week 2 of the Platform Based Software Engineering course. The project focuses on setting up foundational platform architectures, modular component design, and collaborative software development practices.
 
@@ -14,7 +14,7 @@ This repository contains the codebase and deliverables developed during Week 2 o
 
 ---
 
-## 👥 Team Members
+## Team Members
 
 1. Muhammad Keenan Basyir
 2. Muhammad Gibran Basyir
@@ -24,7 +24,7 @@ This repository contains the codebase and deliverables developed during Week 2 o
 ---
 
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 pbse-week2-Gibran/
