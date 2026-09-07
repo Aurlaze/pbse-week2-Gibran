@@ -72,7 +72,7 @@ jobs:
 
       # Step 4 of 5: compare the running service against its own contract.
       - name: Contract conformance
-        run: ./tests/contract/run.sh
+        run: bash ./tests/contract/run.sh
         env:
           BASE: http://localhost:3000/v1
 
