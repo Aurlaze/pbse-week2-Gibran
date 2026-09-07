@@ -22,6 +22,10 @@ echo "spec: $SPEC"
 echo "base: $BASE"
 echo
 
+# schemathesis.toml is discovered by searching upwards from the working
+# directory, so run from the directory holding it.
+cd "$HERE"
+
 # unsupported_method is excluded because 405 is not documented on any
 # operation, so returning it would fail the undocumented-status check instead.
-schemathesis run "$SPEC"   --url "$BASE"   --checks all   --exclude-checks unsupported_method   --config-file "$HERE/schemathesis.toml"   --header 'Content-Type: application/json'
+schemathesis run "$SPEC"   --url "$BASE"   --checks all   --exclude-checks unsupported_method   --header 'Content-Type: application/json'
