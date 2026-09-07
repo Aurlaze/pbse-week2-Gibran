@@ -9,7 +9,8 @@ router.get("/courts", async (req, res) => {
   const { status, limit, cursor } = req.query;
   let decodedCursor;
 
-  if (cursor !== undefined) {
+  // An empty cursor is schema-valid and means the first page.
+  if (cursor !== undefined && cursor !== "") {
     const decoded = Buffer.from(cursor, "base64").toString("utf8");
     const reEncoded = Buffer.from(decoded).toString("base64");
 
@@ -34,8 +35,8 @@ router.get("/courts", async (req, res) => {
     }
   }
 
-  // Validation
-  if (status && !["active", "retired"].includes(status)) {
+  // Checked for presence, not truthiness: "" is not in the documented enum.
+  if (status !== undefined && !["active", "retired"].includes(status)) {
     return problem(res, 400, "malformed-request", { detail: "Invalid status value" });
   }
 

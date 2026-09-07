@@ -1,22 +1,18 @@
 const { problem } = require("../problem");
 
-// No route matched. Without this, Express answers with an HTML page, which is
-// not a shape any client of this API can parse.
+// Express answers unmatched routes with HTML, which no client of this API can parse.
 function notFoundHandler(req, res) {
   return problem(res, 404, "not-found", {
     detail: `No route matches ${req.method} ${req.path}`
   });
 }
 
-// Registered last, after every route (A.6.3). Full detail goes to the log;
-// the response body carries nothing internal.
 function globalErrorHandler(err, req, res, next) {
   if (res.headersSent) {
     return next(err);
   }
 
-  // express.json() rejects a malformed body here. The contract calls that a
-  // 400, not a 500 - the request could not be read as promised.
+  // express.json() rejects a malformed body here, which is a 400 and not a 500.
   if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
     console.warn(
       JSON.stringify({
@@ -43,7 +39,7 @@ function globalErrorHandler(err, req, res, next) {
     })
   );
 
-  // No message, no stack, no SQL, no hostname - only the documented shape.
+  // Detail goes to the log; the body carries nothing internal.
   return problem(res, 500, "internal-error");
 }
 

@@ -1,10 +1,6 @@
-// service/src/store/bookings.js
-// The only place SQL is written for bookings and idempotency keys (A.7.4).
-
 const pool = require('./db');
 
-// The contract states keys are retained 24 hours, and that a key reused after
-// that window is treated as new. The window is applied here, in the lookup.
+// The contract retains keys for 24 hours; a key reused after that is new.
 async function checkIdempotencyKey(key) {
     const result = await pool.query(
         `
@@ -29,8 +25,7 @@ async function saveIdempotencyKey(key, bodyHash, status, responseBody) {
     );
 }
 
-// Backs the 409 court-slot-unavailable branch. Half-open intervals: a booking
-// ending exactly when another starts does not overlap.
+// Half-open intervals: a booking ending as another starts does not overlap.
 async function findOverlappingBooking(courtId, startTime, endTime) {
     const result = await pool.query(
         `

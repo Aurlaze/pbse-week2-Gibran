@@ -44,12 +44,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Step 1 of 5: apply the committed database structure to an empty
-      # database. If this fails, schema.sql is not runnable from empty.
+      # Proves schema.sql is runnable from an empty database.
       - name: Apply schema and seed
         run: |
-          psql "$DATABASE_URL" -f service/db/schema.sql
-          psql "$DATABASE_URL" -f service/db/seed.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f service/db/schema.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f service/db/seed.sql
+          echo "tables created:"
+          psql "$DATABASE_URL" -c '\dt'
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
 
@@ -60,25 +61,25 @@ jobs:
       - name: Install schemathesis
         run: pip install schemathesis
 
-      # Step 2 of 5: start the service.
       - name: Start the service
-        run: npm start &
+        run: npm start > /tmp/service.log 2>&1 &
         working-directory: service
 
-      # Step 3 of 5: wait until it is ready. /health touches no dependency,
-      # so this reports the process being up and nothing else.
       - name: Wait for readiness
         run: npx --yes wait-on http://localhost:3000/health --timeout 60000
 
-      # Step 4 of 5: compare the running service against its own contract.
       - name: Contract conformance
         run: bash ./tests/contract/run.sh
         env:
           BASE: http://localhost:3000/v1
 
-      # Step 5 of 5: the idempotency rule the contract states, checked
-      # end to end. Two identical POSTs with one key must produce two 201s,
-      # identical bodies, and exactly one row.
+      - name: Service log
+        if: always()
+        run: |
+          echo "=== service stdout/stderr ==="
+          cat /tmp/service.log || echo "(no log captured)"
+
+      # Two identical POSTs with one key: two 201s, same body, one row.
       - name: Idempotency replay
         run: |
           KEY=$(uuidgen)

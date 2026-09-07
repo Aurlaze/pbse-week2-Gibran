@@ -18,6 +18,31 @@ in the URL path, which changes only on a breaking revision.
 
 ---
 
+## 0.3.0 — 2026-09-07
+
+### Added
+
+- **`400` documented on `POST /v1/courts/{courtId}/retirement`.**
+  The operation documented only `200`, `201`, `404` and `409`, but any request
+  body that is not a JSON object is rejected before the handler is reached, and
+  a contract test found it: `-d '"AAA"'` produced an undocumented `400`. Every
+  operation carrying a `requestBody` can fail to parse it, so the response was
+  documented. Additive, so a minor bump.
+
+### Fixed (implementation, not contract)
+
+Recorded here because a contract test found them, though neither changed the
+document:
+
+- `GET /v1/courts?cursor=` returned `400`. The contract types `cursor` as a
+  plain string with no minimum length, so an empty value is schema-compliant
+  and now means "first page".
+- `GET /v1/courts?status=` returned `200`. The empty string is not a member of
+  the documented `enum`, so it is now a `400`. The check tested truthiness
+  rather than presence, which silently accepted it.
+
+---
+
 ## 0.2.0 — 2026-09-06
 
 ### Added
@@ -70,5 +95,11 @@ These are recorded rather than silently fixed, so the decision is visible.
   `allowedFrom` lists `active` as the permitted source state. One of the two is
   wrong. Resolving it requires the state table from Worksheet W4, which is the
   `## State machine` section still marked TODO in `info.description`.
+- **`405` is not documented on any operation.** A method not listed on a path
+  currently falls through to the catch-all and returns `404`. Returning `405`
+  would be better HTTP, but it cannot be done until `405` is documented on the
+  operations that would produce it, or the response becomes an undocumented
+  status. The `unsupported_method` check is excluded in
+  `tests/contract/schemathesis.toml` until this is resolved.
 - **`info.description` and two operation descriptions still contain `TODO`
   markers** inherited from the Session 2 skeleton.

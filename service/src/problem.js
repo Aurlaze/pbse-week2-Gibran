@@ -1,8 +1,8 @@
-// The single function that produces every failure response for this API (A.6.1).
+// The single function that produces every failure response.
 
 const BASE = "https://api.example.com/problems";
 
-
+// One fixed title per slug, so clients can branch on type rather than wording.
 const TITLES = {
   "malformed-request": "The request could not be parsed",
   "not-found": "Resource not found",
@@ -17,8 +17,6 @@ function problem(res, status, slug, options = {}) {
   const { detail, ...extensions } = options;
 
   if (!TITLES[slug]) {
-    // A slug with no registered title is a programming error, not a client
-    // error. Fail loudly in the log rather than shipping an untitled problem.
     console.error(`problem(): unregistered slug "${slug}"`);
   }
 
@@ -31,7 +29,6 @@ function problem(res, status, slug, options = {}) {
       title: TITLES[slug] || TITLES["internal-error"],
       status,
       ...(detail ? { detail } : {}),
-      // Ties this response to the matching server log line (A.6.3).
       instance: `urn:request:${res.req?.id ?? "unknown"}`
     });
 }

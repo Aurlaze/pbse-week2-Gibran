@@ -14,13 +14,11 @@ const { problem } = require("../problem");
 
 const router = express.Router();
 
-// Opaque and server-generated, matching the contract's ^bkg_[A-Za-z0-9]{3,}$.
 function newBookingId() {
   return `bkg_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-// Key order must not change the hash, or a client that serialises its JSON
-// differently on a retry would be told its identical request was a reuse.
+// Key order must not change the hash, or a retry would look like a reuse.
 function hashBody(body) {
   const canonical = JSON.stringify({
     courtId: body.courtId,
@@ -31,7 +29,7 @@ function hashBody(body) {
 }
 
 router.post("/bookings", async (req, res) => {
-  // 2 - Validate: the idempotency key, before any work at all (A.8).
+  // Validation
   const idempotencyKey = req.get("Idempotency-Key");
 
   if (!isValidIdempotencyKey(idempotencyKey)) {
@@ -41,7 +39,6 @@ router.post("/bookings", async (req, res) => {
     });
   }
 
-  // 2 - Validate: the body, once, against the documented schema (A.5.1).
   const parsed = parseNewBooking(req.body);
 
   if (!parsed.ok) {
@@ -53,7 +50,7 @@ router.post("/bookings", async (req, res) => {
 
   const { courtId, startTime, endTime } = parsed.data;
 
-  // Each field is individually valid, but the pair is unusable -> 422.
+  // Each field is valid on its own, but the pair is unusable.
   if (Date.parse(endTime) <= Date.parse(startTime)) {
     return problem(res, 422, "validation-failed", {
       detail: "endTime must be after startTime",
@@ -61,7 +58,7 @@ router.post("/bookings", async (req, res) => {
     });
   }
 
-  // 3 - Work: replay or reject before doing anything consequential (A.8).
+  // Idempotency, before any consequential work
   const bodyHash = hashBody(parsed.data);
   const existing = await checkIdempotencyKey(idempotencyKey);
 
@@ -73,7 +70,6 @@ router.post("/bookings", async (req, res) => {
       });
     }
 
-    // Same key, same body: do no work, resend the stored response.
     const storedBody = JSON.parse(existing.response_body);
     return res
       .status(existing.response_status)
@@ -81,7 +77,7 @@ router.post("/bookings", async (req, res) => {
       .json(storedBody);
   }
 
-  // 3 - Work: domain rules, enforced here rather than in any client (A.5.3).
+  // Work
   const court = await findCourtById(courtId);
 
   if (!court) {
@@ -116,8 +112,7 @@ router.post("/bookings", async (req, res) => {
     endTime
   );
 
-  // 4 - Represent, then record the response against the key so a retry can
-  // replay it verbatim.
+  // Representation
   const representation = toBookingRepresentation(booking);
 
   await saveIdempotencyKey(
@@ -127,8 +122,7 @@ router.post("/bookings", async (req, res) => {
     JSON.stringify(representation)
   );
 
-  // 5 - Respond: 201, a Location header, and the same shape a later read of
-  // this booking would return (A.5.4).
+  // Response
   return res
     .status(201)
     .location(`/v1/bookings/${representation.id}`)

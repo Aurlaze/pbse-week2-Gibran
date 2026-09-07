@@ -17,7 +17,7 @@ info:
   # TODO: your domain.
   title: Badminton Court Booking API
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
-  version: 0.2.0
+  version: 0.3.0
   description: |
     This server allows students and other users to view and book badminton courts.
     All money amounts are whole numbers in the smallest unit of the currency.
@@ -243,6 +243,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Retirement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |

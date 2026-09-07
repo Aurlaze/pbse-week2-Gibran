@@ -19,7 +19,7 @@ CREATE TABLE courts (
 CREATE INDEX IF NOT EXISTS bookings_court_id_start_time_idx
     ON bookings (court_id, start_time);
 
--- Idempotency Keys table (Required by A.8 to prevent memory storage)
+-- Keys live here rather than in process memory, so they survive a restart.
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     key VARCHAR(255) PRIMARY KEY,
     body_hash VARCHAR(255) NOT NULL,

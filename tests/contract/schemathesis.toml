@@ -1,0 +1,4 @@
+[checks.positive_data_acceptance]
+# JSON Schema cannot compare two fields, so a body with endTime before
+# startTime is generated as valid input. Rejecting it with 422 is correct.
+expected-statuses = ["2xx", 401, 403, 404, 409, 422]

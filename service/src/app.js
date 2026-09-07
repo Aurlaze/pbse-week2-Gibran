@@ -1,4 +1,3 @@
-// Load configuration before anything reads process.env (A.10).
 require("dotenv").config();
 
 const { randomUUID } = require("node:crypto");
@@ -8,9 +7,8 @@ const courtsRouter = require("./routes/courts");
 const bookingsRouter = require("./routes/bookings");
 const { notFoundHandler, globalErrorHandler } = require("./middleware/error");
 
-
-// Configuration check (A.10.3)
-
+// Refuse to start when a required value is missing. DB_PASSWORD is excluded
+// because an empty password is valid locally.
 const REQUIRED_ENV = ["DB_USER", "DB_HOST", "DB_NAME", "DB_PORT"];
 
 const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
@@ -26,8 +24,7 @@ if (missing.length > 0) {
 
 const app = express();
 
-
-// Request identifier (A.6.3)
+// One id per request, echoed into every problem response and log line.
 app.use((req, res, next) => {
   req.id = req.get("X-Request-Id") || randomUUID();
   res.set("X-Request-Id", req.id);
@@ -36,17 +33,14 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-
-// Liveness (A.10.4)
+// Checks no dependency, so a database outage cannot restart every instance.
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 
-
-// Routes
+// Mounted under /v1 to match the server URLs in openapi.yaml.
 app.use("/v1", courtsRouter);
 app.use("/v1", bookingsRouter);
 
-
-// Failures, registered last, after every route.
+// Registered last, after every route.
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
