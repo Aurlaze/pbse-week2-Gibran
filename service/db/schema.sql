@@ -7,6 +7,8 @@ CREATE TABLE courts (
     status VARCHAR(20) NOT NULL
 );
 
+-- Columns derived from the Booking schema in openapi.yaml, plus created_at.
+CREATE TABLE IF NOT EXISTS bookings (
     id VARCHAR(50) PRIMARY KEY,
     court_id VARCHAR(50) NOT NULL REFERENCES courts(id),
     start_time TIMESTAMPTZ NOT NULL,
@@ -16,6 +18,7 @@ CREATE TABLE courts (
     CHECK (end_time > start_time)
 );
 
+-- Supports the overlap lookup.
 CREATE INDEX IF NOT EXISTS bookings_court_id_start_time_idx
     ON bookings (court_id, start_time);
 
