@@ -18,6 +18,23 @@ in the URL path, which changes only on a breaking revision.
 
 ---
 
+## 0.4.0 — 2026-09-07
+
+### Changed
+
+- **`Idempotency-Key` now carries a version-4 UUID pattern.** The parameter
+  declared `format: uuid`, which admits every UUID version, while the
+  `## Idempotency` section of `info.description` said version 4 and the service
+  enforced version 4. A contract test found the gap: a schema-compliant v1 UUID
+  was rejected with `400`.
+
+  The prose and the implementation already agreed, so the schema was corrected
+  to match them rather than the service being loosened. No client that worked
+  before is affected, because a non-v4 key was never accepted — hence a minor
+  bump.
+
+---
+
 ## 0.3.0 — 2026-09-07
 
 ### Added

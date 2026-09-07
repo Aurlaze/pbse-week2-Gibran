@@ -46,12 +46,15 @@ function parseNewBooking(body) {
     return { ok: false, invalidFields };
   }
 
+  // Normalised to UTC. RFC 3339 allows offsets up to +/-23:59, but Postgres
+  // rejects anything beyond +/-15:59, and the offset is only notation: the
+  // instant is what gets stored.
   return {
     ok: true,
     data: {
       courtId: body.courtId,
-      startTime: body.startTime,
-      endTime: body.endTime
+      startTime: new Date(body.startTime).toISOString(),
+      endTime: new Date(body.endTime).toISOString()
     }
   };
 }
