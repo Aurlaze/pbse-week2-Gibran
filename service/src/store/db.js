@@ -11,7 +11,10 @@ const pool = process.env.DATABASE_URL
       // a private CA the container does not trust.
       ssl: process.env.DATABASE_URL.includes("localhost")
         ? false
-        : { rejectUnauthorized: false }
+        : { rejectUnauthorized: false },
+      // Each serverless instance keeps its own pool, so keep them small and
+      // let Neon's pooler endpoint do the multiplexing.
+      max: process.env.VERCEL ? 1 : 10
     })
   : new Pool({
       user: process.env.DB_USER,

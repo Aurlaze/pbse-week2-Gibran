@@ -25,21 +25,28 @@ anyone who knows the URL, so no personal data goes into the database.
 
 ## Decision
 
-### 1. Hosting: Render for the service, Neon for Postgres
+### 1. Hosting: Vercel for the service, Neon for Postgres
 
-Both have a free tier that needs no card, and both are driven from the browser,
-so any member can reach the running service without another member's laptop
-being open.
+Both have a free tier that needs no card and both deploy from GitHub, so the
+service is reachable without any member's laptop being open.
 
-They were split rather than taken from one provider because Render's free
-Postgres instance is deleted after 30 days, which falls before Session 11 when
-A2 is due. Neon's free database has no such expiry, so the data outlives the
-course deliverable.
+They were split rather than taken from one provider because Neon's free
+database has no expiry, and it outlives the course deliverable. Vercel runs the
+service as serverless functions, so `api/index.js` exports the app rather than
+calling `listen()`; `src/server.js` still starts an ordinary process for local
+development and for the contract tests in CI.
 
-`render.yaml` is committed, so the service can be recreated from a clean
-checkout without anyone reconstructing dashboard settings by hand. The only
-value set by hand is `DATABASE_URL`, which is a secret and is never committed.
-The steps are written out in `docs/deployment.md`.
+Two consequences follow from the serverless model and are handled explicitly.
+Each invocation keeps its own connection pool, so `max` is set to 1 on Vercel
+and the **pooled** Neon endpoint is used, which multiplexes on the database
+side. And there is no long-running process to restart for the A.7.1
+persistence check, so a redeploy stands in for it - the property being shown is
+that the data lives outside the process, which a redeploy demonstrates equally.
+
+`service/vercel.json` and `service/api/index.js` are committed, so the service
+can be recreated from a clean checkout. The only value set by hand is
+`DATABASE_URL`, which is a secret and is never committed. The steps are written
+out in `docs/deployment.md`.
 
 `db/apply.js` builds the database from empty with `npm run db:setup`. It exists
 because `psql` is not installed by default on Windows, and A.7.2 asks that any
@@ -64,6 +71,9 @@ Keys are retained 24 hours, as the contract states, and the window is applied
 in the lookup query rather than by a cleanup job.
 
 ### 3. Two deviations from the A.1 directory structure
+
+**`service/api/` holds the Vercel entry point.** `api/index.js` exports the app
+so a serverless invocation can call it. It contains one line and no logic.
 
 **`src/server.js` is separate from `src/app.js`.** `app.js` assembles the
 application and exports it; `server.js` is the only file that calls `listen()`.

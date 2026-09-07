@@ -1,30 +1,32 @@
 # Deploying
 
-Neon for Postgres, Render for the service. Both free, both driven from the
+Neon for Postgres, Vercel for the service. Both free, both driven from the
 browser. Anyone with the repository can repeat these steps.
 
 ## 1. Database (Neon)
 
 1. Sign up at <https://neon.tech> with GitHub.
-2. **Create project** - name it `badminton-booking`, region **Singapore**.
-3. Copy the connection string from the dashboard. It looks like:
+2. **Create project**, region **Singapore** (`ap-southeast-1`).
+3. Copy the **pooled** connection string, the one whose host contains
+   `-pooler`. It looks like:
 
    ```
-   postgresql://USER:PASSWORD@ep-xxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+   postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
    ```
 
-   Treat it as a password. It never goes in the repository.
+   The pooled endpoint matters here: each serverless invocation keeps its own
+   connection, and the direct endpoint runs out of them quickly.
+
+   Treat the string as a password. It never goes in the repository.
 
 ## 2. Build the schema
-
-From your machine, with that string:
 
 ```bash
 cd service
 DATABASE_URL='postgresql://...' npm run db:setup
 ```
 
-Expected output:
+Expected:
 
 ```
 applying schema.sql ... ok
@@ -32,30 +34,36 @@ applying seed.sql ... ok
 tables: bookings, courts, idempotency_keys
 ```
 
-If all three tables are not listed, stop here. The service cannot work until
-they exist, and a missing `bookings` table shows up as a 500 on every write.
+If all three tables are not listed, stop. A missing `bookings` table shows up
+later as a 500 on every write.
 
-## 3. Service (Render)
+## 3. Service (Vercel)
 
-1. Sign up at <https://render.com> with GitHub.
-2. **New > Blueprint**, pick this repository. Render reads `render.yaml` and
-   proposes one web service.
-3. When prompted for `DATABASE_URL`, paste the Neon string.
-4. **Apply**. The first build takes a few minutes.
+1. Sign up at <https://vercel.com> with GitHub.
+2. **Add New > Project**, import this repository.
+3. **Set Root Directory to `service`.** This is the one setting that is easy to
+   miss and breaks the build if wrong: the app's `package.json` lives in
+   `service/`, not at the repository root.
+4. Framework preset: **Other**. The build needs no configuration beyond that,
+   because `service/vercel.json` routes every path to `service/api/index.js`.
+5. Under **Environment Variables**, add `DATABASE_URL` with the Neon string.
+   Apply it to Production, Preview and Development.
+6. **Deploy.**
 
-Do not set `PORT`. Render provides it, and `src/server.js` already reads it.
+Do not set `PORT`. There is no long-running process to bind one; `api/index.js`
+exports the app and Vercel invokes it per request.
 
 ## 4. Check it
 
 ```bash
-BASE=https://<your-service>.onrender.com
+BASE=https://<your-project>.vercel.app
 
 curl -s "$BASE/health"
 curl -s "$BASE/v1/courts"
 curl -s -o /dev/null -w '%{http_code}
-' "$BASE/v1/courts/BAD-ID"   # 400
+' "$BASE/v1/courts/BAD-ID"    # 400
 curl -s -o /dev/null -w '%{http_code}
-' "$BASE/v1/courts/crt_zzz"  # 404
+' "$BASE/v1/courts/crt_zzz"   # 404
 ```
 
 Then the idempotency rule, end to end:
@@ -64,13 +72,16 @@ Then the idempotency rule, end to end:
 KEY=$(uuidgen)
 for i in 1 2; do
   curl -s -o /tmp/r$i.json -w '%{http_code}
-'     -X POST "$BASE/v1/bookings"     -H "Idempotency-Key: $KEY" -H 'Content-Type: application/json'     -d '{"courtId":"crt_51Fa93cD","startTime":"2026-08-29T19:00:00+07:00","endTime":"2026-08-29T20:00:00+07:00"}'
+'     -X POST "$BASE/v1/bookings"     -H "Idempotency-Key: $KEY" -H 'Content-Type: application/json'     -d '{"courtId":"crt_51Fa93cD","startTime":"2027-03-01T19:00:00+07:00","endTime":"2027-03-01T20:00:00+07:00"}'
 done
 diff /tmp/r1.json /tmp/r2.json && echo "identical responses"
 ```
 
-Two `201`s and identical bodies. Then **Manual Deploy > Restart** in Render and
-`GET` the booking again: it must still be there.
+Two `201`s, identical bodies, one new row.
+
+For the restart demonstration there is no process to restart, so redeploy from
+the Vercel dashboard instead and read the booking back. The point of the check
+is that the data lives outside the process, which a redeploy shows just as well.
 
 ## 5. Record it
 
@@ -81,13 +92,13 @@ Two `201`s and identical bodies. Then **Manual Deploy > Restart** in Render and
 - Run the contract check against it:
 
   ```bash
-  BASE=https://<your-service>.onrender.com/v1 ./tests/contract/run.sh
+  BASE=https://<your-project>.vercel.app/v1 ./tests/contract/run.sh
   ```
 
 ## Notes
 
-The free Render instance sleeps after inactivity, so the first request after a
-quiet period takes ~30 seconds. Wake it before demonstrating.
+The first request after a quiet period pays a cold start of a second or two.
+Wake it before demonstrating.
 
-Configuration lives only in Render's dashboard. `DATABASE_URL` is the single
-secret; everything else is committed and identical everywhere.
+`DATABASE_URL` is the only secret, and it is set in Vercel's dashboard.
+Everything else is committed and identical in every environment.
