@@ -4,10 +4,10 @@
   "private": true,
   "description": "The written interface, and a mock server built from it. No service code lives here.",
   "scripts": {
-    "lint": "redocly lint openapi.yaml",
-    "docs": "redocly build-docs openapi.yaml -o docs.html",
-    "mock": "prism mock openapi.yaml",
-    "mock:dynamic": "prism mock -d openapi.yaml",
+    "lint": "redocly lint ../openapi.yaml",
+    "docs": "redocly build-docs ../openapi.yaml -o docs.html",
+    "mock": "prism mock ../openapi.yaml",
+    "mock:dynamic": "prism mock -d ../openapi.yaml",
     "check": "npm run lint && npm run docs"
   },
   "devDependencies": {

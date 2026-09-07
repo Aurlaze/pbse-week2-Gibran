@@ -9,7 +9,7 @@ Welcome to the repository for **Week 2 Group Assignment** in **Platform Based So
 This repository contains the codebase and deliverables developed during Week 2 of the Platform Based Software Engineering course. The project focuses on setting up foundational platform architectures, modular component design, and collaborative software development practices.
 
 * Badminton Court Booking System: A customer books the available court and the staff checks and confirms it on the system
-* Interface: spec/openapi.yaml
+* Interface: openapi.yaml (repository root)
 * Run the mock: cd spec && npm install && npm run mock
 
 ---

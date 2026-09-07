@@ -1,0 +1,101 @@
+name: contract
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: badminton_booking
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: badminton_booking
+      PORT: 3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: service/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Step 1 of 5: apply the committed database structure to an empty
+      # database. If this fails, schema.sql is not runnable from empty.
+      - name: Apply schema and seed
+        run: |
+          psql "$DATABASE_URL" -f service/db/schema.sql
+          psql "$DATABASE_URL" -f service/db/seed.sql
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
+
+      - name: Install service dependencies
+        run: npm ci
+        working-directory: service
+
+      - name: Install schemathesis
+        run: pip install schemathesis
+
+      # Step 2 of 5: start the service.
+      - name: Start the service
+        run: npm start &
+        working-directory: service
+
+      # Step 3 of 5: wait until it is ready. /health touches no dependency,
+      # so this reports the process being up and nothing else.
+      - name: Wait for readiness
+        run: npx --yes wait-on http://localhost:3000/health --timeout 60000
+
+      # Step 4 of 5: compare the running service against its own contract.
+      - name: Contract conformance
+        run: ./tests/contract/run.sh
+        env:
+          BASE: http://localhost:3000/v1
+
+      # Step 5 of 5: the idempotency rule the contract states, checked
+      # end to end. Two identical POSTs with one key must produce two 201s,
+      # identical bodies, and exactly one row.
+      - name: Idempotency replay
+        run: |
+          KEY=$(uuidgen)
+          BODY='{"courtId":"crt_51Fa93cD","startTime":"2026-08-29T19:00:00+07:00","endTime":"2026-08-29T20:00:00+07:00"}'
+          for i in 1 2; do
+            code=$(curl -s -o "/tmp/r$i.json" -w '%{http_code}' \
+              -X POST http://localhost:3000/v1/bookings \
+              -H "Idempotency-Key: $KEY" \
+              -H 'Content-Type: application/json' \
+              -d "$BODY")
+            echo "attempt $i -> $code"
+            [ "$code" = "201" ] || { echo "expected 201, got $code"; cat "/tmp/r$i.json"; exit 1; }
+          done
+          diff /tmp/r1.json /tmp/r2.json || { echo "replayed response differs"; exit 1; }
+          rows=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM bookings")
+          echo "rows in bookings: $rows"
+          [ "$rows" = "1" ] || { echo "expected exactly 1 booking row, found $rows"; exit 1; }
+          echo "one key, two 201s, identical bodies, one row"
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
