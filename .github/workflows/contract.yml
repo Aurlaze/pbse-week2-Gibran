@@ -68,18 +68,9 @@ jobs:
       - name: Wait for readiness
         run: npx --yes wait-on http://localhost:3000/health --timeout 60000
 
-      - name: Contract conformance
-        run: bash ./tests/contract/run.sh
-        env:
-          BASE: http://localhost:3000/v1
-
-      - name: Service log
-        if: always()
-        run: |
-          echo "=== service stdout/stderr ==="
-          cat /tmp/service.log || echo "(no log captured)"
-
       # Two identical POSTs with one key: two 201s, same body, one row.
+      # Runs before the fuzzer, which posts the contract's own example body
+      # and would otherwise hold this slot.
       - name: Idempotency replay
         run: |
           KEY=$(uuidgen)
@@ -94,9 +85,20 @@ jobs:
             [ "$code" = "201" ] || { echo "expected 201, got $code"; cat "/tmp/r$i.json"; exit 1; }
           done
           diff /tmp/r1.json /tmp/r2.json || { echo "replayed response differs"; exit 1; }
-          rows=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM bookings")
-          echo "rows in bookings: $rows"
+          rows=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM bookings WHERE court_id = 'crt_51Fa93cD' AND start_time = '2026-08-29T19:00:00+07:00'")
+          echo "rows for that court and slot: $rows"
           [ "$rows" = "1" ] || { echo "expected exactly 1 booking row, found $rows"; exit 1; }
           echo "one key, two 201s, identical bodies, one row"
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
+
+      - name: Contract conformance
+        run: bash ./tests/contract/run.sh
+        env:
+          BASE: http://localhost:3000/v1
+
+      - name: Service log
+        if: always()
+        run: |
+          echo "=== service stdout/stderr ==="
+          cat /tmp/service.log || echo "(no log captured)"
