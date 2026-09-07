@@ -2,3 +2,15 @@
 # JSON Schema cannot compare two fields, so a body with endTime before
 # startTime is generated as valid input. Rejecting it with 422 is correct.
 expected-statuses = ["2xx", 401, 403, 404, 409, 422]
+
+# POST /bookings additionally requires a version-4 Idempotency-Key header. The
+# generator does not hold header parameters to their schema for this check, so
+# it sends values like "true" or "{}" with an otherwise valid body and expects
+# them accepted. A malformed key is a 400 before any work is done, which is the
+# first row of the idempotency decision table in the assignment.
+[[operations]]
+include-path = "/bookings"
+include-method = "POST"
+
+[operations.checks.positive_data_acceptance]
+expected-statuses = ["2xx", 400, 401, 403, 404, 409, 422]

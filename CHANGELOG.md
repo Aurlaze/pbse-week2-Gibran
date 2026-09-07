@@ -18,6 +18,35 @@ in the URL path, which changes only on a breaking revision.
 
 ---
 
+## 0.4.1 — 2026-09-07
+
+### Changed
+
+- **`format: uuid` dropped from `Idempotency-Key`; the v4 `pattern` is now the
+  whole constraint.** Nothing that validated before stops validating: the
+  pattern is stricter than the format, so it already decided every case. The
+  two together left the contract test unable to generate a conforming value at
+  all, and it sent requests with the header missing.
+
+### Fixed (implementation, not contract)
+
+Found by contract tests, none of which changed the document:
+
+- **Unknown query parameters are now rejected with `400`.** `GET /v1/courts`
+  accepted `?anything=42` and ignored it. A.4.4 makes parameter names part of
+  the contract, so a name the contract does not list cannot be read.
+- **An unresolvable `cursor` now returns `200` with an empty list.** It
+  previously returned `400`, which contradicted the contract's own typing of
+  `cursor` as a plain string with no constraints. A cursor that decodes to no
+  court id names no position, so nothing follows it. The decoded value is no
+  longer passed to the database, which rejects the arbitrary bytes such a
+  cursor can carry.
+- **Query parameters are validated before the cursor is resolved**, so a
+  request carrying both a bad `limit` and an unresolvable cursor is a `400`
+  rather than an empty `200`.
+
+---
+
 ## 0.4.0 — 2026-09-07
 
 ### Changed

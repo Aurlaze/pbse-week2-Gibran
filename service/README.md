@@ -58,7 +58,7 @@ produce it.
 
 | Cause in the handler | Status | `type` URI | Extension members |
 |---|---:|---|---|
-| Invalid `cursor` value | 400 | `…/problems/malformed-request` | — |
+| Unknown query parameter | 400 | `…/problems/malformed-request` | `invalidFields` |
 | Invalid `limit` value | 400 | `…/problems/malformed-request` | — |
 | Invalid `status` filter value | 400 | `…/problems/malformed-request` | — |
 | `courtId` fails its documented pattern | 400 | `…/problems/malformed-request` | — |

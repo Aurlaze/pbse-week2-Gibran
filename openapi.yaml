@@ -17,7 +17,7 @@ info:
   # TODO: your domain.
   title: Badminton Court Booking API
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
-  version: 0.4.0
+  version: 0.4.1
   description: |
     This server allows students and other users to view and book badminton courts.
     All money amounts are whole numbers in the smallest unit of the currency.
@@ -139,9 +139,9 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
-            # format: uuid alone admits every UUID version. This service
-            # accepts version 4 only, as stated under Idempotency above.
+            # A version-4 UUID with hyphens, as stated under Idempotency above.
+            # The pattern is the whole constraint; format: uuid is not used
+            # because it admits every UUID version and says less than this.
             pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
           example: 0f7c1b9e-3d21-4a6f-9c05-8e2b7d41a9f0
           description: |

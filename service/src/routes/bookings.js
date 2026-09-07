@@ -30,7 +30,7 @@ function hashBody(body) {
 
 router.post("/bookings", async (req, res) => {
   // Validation
-  const idempotencyKey = req.get("Idempotency-Key");
+  const idempotencyKey = req.get("Idempotency-Key")?.trim();
 
   if (!isValidIdempotencyKey(idempotencyKey)) {
     return problem(res, 400, "malformed-request", {

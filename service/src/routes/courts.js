@@ -5,21 +5,31 @@ const { problem } = require("../problem");
 
 const router = express.Router();
 
+// The contract names the query parameters of this operation, so a name it does
+// not name is a request this service cannot read.
+const LIST_COURTS_PARAMS = ["status", "limit", "cursor"];
+
 router.get("/courts", async (req, res) => {
   const { status, limit, cursor } = req.query;
-  let decodedCursor;
 
-  // An empty cursor is schema-valid and means the first page.
-  if (cursor !== undefined && cursor !== "") {
-    const decoded = Buffer.from(cursor, "base64").toString("utf8");
-    const reEncoded = Buffer.from(decoded).toString("base64");
+  const unknown = Object.keys(req.query).filter(
+    (k) => !LIST_COURTS_PARAMS.includes(k)
+  );
 
-    if (reEncoded !== cursor || !/^crt_[A-Za-z0-9]{3,}$/.test(decoded)) {
-      return problem(res, 400, "malformed-request", { detail: "Invalid cursor value" });
-    }
-
-    decodedCursor = decoded;
+  if (unknown.length > 0) {
+    return problem(res, 400, "malformed-request", {
+      detail: `Unknown query parameter: ${unknown.join(", ")}`,
+      invalidFields: unknown
+    });
   }
+
+  // The cursor is opaque and the contract puts no constraint on it, so any
+  // string is accepted rather than rejected.
+  const decodedCursor =
+    cursor === undefined || cursor === ""
+      ? undefined
+      : Buffer.from(cursor, "base64").toString("utf8");
+
 
   let parsedLimit = 20;
 
@@ -38,6 +48,13 @@ router.get("/courts", async (req, res) => {
   // Checked for presence, not truthiness: "" is not in the documented enum.
   if (status !== undefined && !["active", "retired"].includes(status)) {
     return problem(res, 400, "malformed-request", { detail: "Invalid status value" });
+  }
+
+  // Validation is done. A cursor that does not decode to a court id names no
+  // position, so nothing follows it. Answered here rather than passed to the
+  // database, which rejects the arbitrary bytes such a cursor can carry.
+  if (decodedCursor !== undefined && !/^crt_[A-Za-z0-9]{3,}$/.test(decodedCursor)) {
+    return res.status(200).json({ items: [] });
   }
 
   // Work
@@ -71,6 +88,16 @@ router.get("/courts", async (req, res) => {
 
 router.get("/courts/:courtId", async (req, res) => {
   const { courtId } = req.params;
+
+  // This operation documents no query parameters at all.
+  const unknownQuery = Object.keys(req.query);
+
+  if (unknownQuery.length > 0) {
+    return problem(res, 400, "malformed-request", {
+      detail: `Unknown query parameter: ${unknownQuery.join(", ")}`,
+      invalidFields: unknownQuery
+    });
+  }
 
   // Validation
   const courtIdPattern = /^crt_[A-Za-z0-9]{3,}$/;
