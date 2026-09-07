@@ -10,6 +10,8 @@ This repository contains the codebase and deliverables developed during Week 2 o
 
 * Badminton Court Booking System: A customer books the available court and the staff checks and confirms it on the system
 * Interface: openapi.yaml (repository root)
+* Deployment URL: _not deployed yet - see docs/deployment.md_
+* Deploying: docs/deployment.md
 * Run the mock: cd spec && npm install && npm run mock
 
 ---

@@ -1,6 +1,6 @@
 # 0002 — Implementing the contract
 
-Status: accepted, with one item outstanding (see Decision 1)
+Status: accepted
 Date: 2026-09-06
 Supersedes: nothing. Follows 0001, which chose the contract-first approach.
 
@@ -25,25 +25,26 @@ anyone who knows the URL, so no personal data goes into the database.
 
 ## Decision
 
-### 1. Hosting provider — OUTSTANDING
+### 1. Hosting: Render for the service, Neon for Postgres
 
-**Not yet decided. This is the one blocking item for the L3 tag.**
+Both have a free tier that needs no card, and both are driven from the browser,
+so any member can reach the running service without another member's laptop
+being open.
 
-The service is currently reachable only on `localhost`. A provider must be
-chosen from Appendix C, the service deployed, and three things done to close
-this out:
+They were split rather than taken from one provider because Render's free
+Postgres instance is deleted after 30 days, which falls before Session 11 when
+A2 is due. Neon's free database has no such expiry, so the data outlives the
+course deliverable.
 
-- record the choice and the reason in this section;
-- replace the `https://api.example.com/v1` placeholder in `openapi.yaml`'s
-  `servers` block with the real URL, and re-enable `no-server-example.com` in
-  `spec/redocly.yaml`;
-- add the deployment URL to the root `README.md`.
+`render.yaml` is committed, so the service can be recreated from a clean
+checkout without anyone reconstructing dashboard settings by hand. The only
+value set by hand is `DATABASE_URL`, which is a secret and is never committed.
+The steps are written out in `docs/deployment.md`.
 
-What is graded is not which provider is chosen, but whether someone else can
-repeat the steps from a clean checkout. The service is already built for that:
-configuration comes only from environment variables, it refuses to start when
-one is missing, `db/schema.sql` rebuilds the database from empty in one
-command, and `/health` answers without touching any dependency.
+`db/apply.js` builds the database from empty with `npm run db:setup`. It exists
+because `psql` is not installed by default on Windows, and A.7.2 asks that any
+member can build the database with a single command on a machine never used for
+this before.
 
 ### 2. Idempotency keys live in a Postgres table
 

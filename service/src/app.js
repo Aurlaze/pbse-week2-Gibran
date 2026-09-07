@@ -7,19 +7,22 @@ const courtsRouter = require("./routes/courts");
 const bookingsRouter = require("./routes/bookings");
 const { notFoundHandler, globalErrorHandler } = require("./middleware/error");
 
-// Refuse to start when a required value is missing. DB_PASSWORD is excluded
-// because an empty password is valid locally.
+// Refuse to start when configuration is missing. Either DATABASE_URL alone,
+// or the discrete variables. DB_PASSWORD is excluded because an empty
+// password is valid locally.
 const REQUIRED_ENV = ["DB_USER", "DB_HOST", "DB_NAME", "DB_PORT"];
 
-const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (!process.env.DATABASE_URL) {
+  const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
 
-if (missing.length > 0) {
-  console.error(
-    `Refusing to start. Missing required environment variables: ${missing.join(", ")}
+  if (missing.length > 0) {
+    console.error(
+      `Refusing to start. Set DATABASE_URL, or these missing variables: ${missing.join(", ")}
 ` +
-      "See service/.env.example for the full list."
-  );
-  process.exit(1);
+        "See service/.env.example for the full list."
+    );
+    process.exit(1);
+  }
 }
 
 const app = express();
