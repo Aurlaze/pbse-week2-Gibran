@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-09-15
+### Changed - BREAKING
+All `/v1/**` operations now require an access token carrying the scope stated on that operation. Requests without a token are answered 401.
+Reason: Session 3 deliberately had no authentication; user data must not be served without checking the caller.
+
+### Added
+- `components.securitySchemes.oauth2` with six scopes.
+- `401` and `403` responses on every protected operation.
+
 Every deliberate change to `openapi.yaml` is recorded here with the reason for
 it. The contract is the reference; the implementation follows it. When the two
 disagree the implementation is fixed, and the contract is changed only when the
