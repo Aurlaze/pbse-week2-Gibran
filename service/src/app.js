@@ -1,5 +1,7 @@
 require("dotenv").config();
 
+require('./config');
+
 const { randomUUID } = require("node:crypto");
 const express = require("express");
 
