@@ -2,6 +2,7 @@ const express = require("express");
 const { findCourtById, findAllCourts } = require("../store/courts");
 const { toCourtRepresentation } = require("../representations/courts");
 const { problem } = require("../problem");
+const requireScope = require("../auth/require-scope");
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ const router = express.Router();
 // not name is a request this service cannot read.
 const LIST_COURTS_PARAMS = ["status", "limit", "cursor"];
 
-router.get("/courts", async (req, res) => {
+router.get("/courts", requireScope("courts:read"), async (req, res) => {
   const { status, limit, cursor } = req.query;
 
   const unknown = Object.keys(req.query).filter(
@@ -30,7 +31,6 @@ router.get("/courts", async (req, res) => {
       ? undefined
       : Buffer.from(cursor, "base64").toString("utf8");
 
-
   let parsedLimit = 20;
 
   if (limit !== undefined) {
@@ -41,19 +41,26 @@ router.get("/courts", async (req, res) => {
       parsedLimit < 1 ||
       parsedLimit > 100
     ) {
-      return problem(res, 400, "malformed-request", { detail: "Invalid limit value" });
+      return problem(res, 400, "malformed-request", {
+        detail: "Invalid limit value"
+      });
     }
   }
 
   // Checked for presence, not truthiness: "" is not in the documented enum.
   if (status !== undefined && !["active", "retired"].includes(status)) {
-    return problem(res, 400, "malformed-request", { detail: "Invalid status value" });
+    return problem(res, 400, "malformed-request", {
+      detail: "Invalid status value"
+    });
   }
 
   // Validation is done. A cursor that does not decode to a court id names no
   // position, so nothing follows it. Answered here rather than passed to the
   // database, which rejects the arbitrary bytes such a cursor can carry.
-  if (decodedCursor !== undefined && !/^crt_[A-Za-z0-9]{3,}$/.test(decodedCursor)) {
+  if (
+    decodedCursor !== undefined &&
+    !/^crt_[A-Za-z0-9]{3,}$/.test(decodedCursor)
+  ) {
     return res.status(200).json({ items: [] });
   }
 
@@ -70,8 +77,6 @@ router.get("/courts", async (req, res) => {
     courts.pop();
   }
 
-
-
   // Representation
   const items = courts.map(toCourtRepresentation);
 
@@ -86,35 +91,43 @@ router.get("/courts", async (req, res) => {
   });
 });
 
-router.get("/courts/:courtId", async (req, res) => {
-  const { courtId } = req.params;
+router.get(
+  "/courts/:courtId",
+  requireScope("courts:read"),
+  async (req, res) => {
+    const { courtId } = req.params;
 
-  // This operation documents no query parameters at all.
-  const unknownQuery = Object.keys(req.query);
+    // This operation documents no query parameters at all.
+    const unknownQuery = Object.keys(req.query);
 
-  if (unknownQuery.length > 0) {
-    return problem(res, 400, "malformed-request", {
-      detail: `Unknown query parameter: ${unknownQuery.join(", ")}`,
-      invalidFields: unknownQuery
-    });
+    if (unknownQuery.length > 0) {
+      return problem(res, 400, "malformed-request", {
+        detail: `Unknown query parameter: ${unknownQuery.join(", ")}`,
+        invalidFields: unknownQuery
+      });
+    }
+
+    // Validation
+    const courtIdPattern = /^crt_[A-Za-z0-9]{3,}$/;
+
+    if (!courtIdPattern.test(courtId)) {
+      return problem(res, 400, "malformed-request", {
+        detail: "Invalid courtId format"
+      });
+    }
+
+    // Work
+    const court = await findCourtById(courtId);
+
+    if (!court) {
+      return problem(res, 404, "not-found", {
+        detail: "Court not found"
+      });
+    }
+
+    // Representation
+    return res.status(200).json(toCourtRepresentation(court));
   }
-
-  // Validation
-  const courtIdPattern = /^crt_[A-Za-z0-9]{3,}$/;
-
-  if (!courtIdPattern.test(courtId)) {
-    return problem(res, 400, "malformed-request", { detail: "Invalid courtId format" });
-  }
-
-  // Work
-  const court = await findCourtById(courtId);
-
-  if (!court) {
-    return problem(res, 404, "not-found", { detail: "Court not found" });
-  }
-
-  // Representation
-  return res.status(200).json(toCourtRepresentation(court));
-});
+);
 
 module.exports = router;

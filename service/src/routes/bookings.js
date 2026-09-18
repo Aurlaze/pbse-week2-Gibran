@@ -11,6 +11,7 @@ const { findCourtById } = require("../store/courts");
 const { toBookingRepresentation } = require("../representations/bookings");
 const { parseNewBooking, isValidIdempotencyKey } = require("../schemas/bookings");
 const { problem } = require("../problem");
+const requireScope = require("../auth/require-scope");
 
 const router = express.Router();
 
@@ -28,7 +29,10 @@ function hashBody(body) {
   return createHash("sha256").update(canonical).digest("hex");
 }
 
-router.post("/bookings", async (req, res) => {
+router.post(
+  "/bookings",
+  requireScope("bookings:write"),
+  async (req, res) => {
   // Validation
   const idempotencyKey = req.get("Idempotency-Key")?.trim();
 

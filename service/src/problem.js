@@ -11,7 +11,8 @@ const TITLES = {
   "idempotency-key-reuse": "That idempotency key was already used for a different request",
   "illegal-transition": "That status change is not permitted",
   "internal-error": "An unexpected error occurred",
-  "unauthenticated": "Authentication required"
+  "unauthenticated": "Authentication required",
+  "insufficient_scope": "Insufficient scope"
 };
 
 function problem(res, status, slug, options = {}) {
