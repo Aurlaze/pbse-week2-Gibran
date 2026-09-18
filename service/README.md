@@ -149,3 +149,13 @@ under the same key.
 Column names are internal; response field names are the contract's. The
 representation function connects the two — `bookings.created_at` exists in the
 table and deliberately never appears in a response.
+
+## Authentication Scopes
+
+| Scope | Permits | Student | Admin | Job |
+| :--- | :--- | :--- | :--- | :--- |
+| `courts:read` | Browse badminton courts and availability | yes | yes | yes |
+| `courts:write` | Create, update, or retire badminton courts | | yes | |
+| `bookings:read` | Read bookings visible to the principal | yes | yes | yes |
+| `bookings:write` | Create and cancel own bookings | yes | | |
+| `bookings:fulfil` | Confirm, reject, or manage all bookings | | yes | yes |

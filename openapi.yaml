@@ -17,7 +17,7 @@ info:
   # TODO: your domain.
   title: Badminton Court Booking API
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
-  version: 0.4.1
+  version: 1.1.0
   description: |
     This server allows students and other users to view and book badminton courts.
     All money amounts are whole numbers in the smallest unit of the currency.
@@ -59,6 +59,11 @@ tags:
   - name: Things
     description: This API manages badminton court bookings and provides operations for creating, retrieving, and managing bookings.
 
+# -------------------------------------------------------------------
+# Document-level security: narrowest scope applied to all routes by default
+# -------------------------------------------------------------------
+security:
+  - oauth2: [courts:read]
 
 paths:
 
@@ -116,6 +121,9 @@ paths:
                     description: Absent on the last page.
                     example: eyJvIjoyMH0
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        
   /bookings:
     # -----------------------------------------------------------------
     # The unsafe, consequential operation. Required for L2.
@@ -126,6 +134,8 @@ paths:
       operationId: createBooking
       summary: Create a badminton court booking
       tags: [Bookings]
+      security:
+        - oauth2: [bookings:write]
       description: |
         Creates a badminton court booking.
 
@@ -172,6 +182,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Booking' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
 
@@ -196,6 +208,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Court' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   # -------------------------------------------------------------------
@@ -215,6 +229,8 @@ paths:
       operationId: deactivateCourt
       summary: Retire a badminton court
       tags: [Courts]
+      security:
+        - oauth2: [courts:write]
       description: |
         TODO: your own transition. Note that the transition carries a
         body of its own (the reason), a response of its own (who and
@@ -247,6 +263,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Retirement' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |
@@ -263,7 +281,35 @@ paths:
                 from: active
                 to: retired
                 allowedFrom: [active]
+
 components:
+  # ---------------------------------------------------------------
+  # Security Schemes for Authentication & Authorization
+  # ---------------------------------------------------------------
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: |
+        Access tokens are issued by the Authorisation Server. Public
+        clients use Authorization Code + PKCE with no client secret.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/auth
+          tokenUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/token
+          refreshUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/token
+          scopes:
+            courts:read: Browse badminton courts and availability
+            courts:write: Create, update, or retire badminton courts
+            bookings:read: Read bookings visible to the principal
+            bookings:write: Create and cancel own bookings
+            bookings:fulfil: Confirm, reject, or manage all bookings
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/token
+          scopes:
+            bookings:fulfil: Manage all bookings for the scheduled cleanup job
 
   schemas:
 
@@ -425,8 +471,30 @@ components:
             title: The request could not be parsed
             status: 400
 
+    Unauthorized:
+      description: The token is absent, unverifiable, or expired.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Bearer error="invalid_token"'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          
+    Forbidden:
+      description: The token is valid but does not carry the scope this operation requires.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Bearer error="insufficient_scope", scope="bookings:write"'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
     NotFound:
-      description: No such resource — or none you may see.
+      description: |
+        The object does not exist, or it exists and is not accessible to this caller.
+        Both conditions are answered identically so identifiers cannot be enumerated.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

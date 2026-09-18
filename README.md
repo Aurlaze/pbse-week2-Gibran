@@ -1,4 +1,5 @@
 # 🏸 PBSE Week 2 - Group Assignment
+## Public URL: https://pbse-week2.vercel.app/v1/courts
 
 Welcome to the repository for **Week 2 Group Assignment** in **Platform Based Software Engineering (PBSE)**.
 
