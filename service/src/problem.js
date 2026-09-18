@@ -10,7 +10,8 @@ const TITLES = {
   "court-slot-unavailable": "The badminton court is not available for this time slot",
   "idempotency-key-reuse": "That idempotency key was already used for a different request",
   "illegal-transition": "That status change is not permitted",
-  "internal-error": "An unexpected error occurred"
+  "internal-error": "An unexpected error occurred",
+  "unauthenticated": "Authentication required"
 };
 
 function problem(res, status, slug, options = {}) {

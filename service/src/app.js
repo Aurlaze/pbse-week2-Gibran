@@ -7,6 +7,7 @@ const express = require("express");
 
 const courtsRouter = require("./routes/courts");
 const bookingsRouter = require("./routes/bookings");
+const authenticate = require("./auth/authenticate");
 const { notFoundHandler, globalErrorHandler } = require("./middleware/error");
 
 // Refuse to start when configuration is missing. Either DATABASE_URL alone,
@@ -40,6 +41,9 @@ app.use(express.json());
 
 // Checks no dependency, so a database outage cannot restart every instance.
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+
+// Authentication for protected API routes.
+app.use(authenticate);
 
 // Mounted under /v1 to match the server URLs in openapi.yaml.
 app.use("/v1", courtsRouter);
