@@ -11,7 +11,7 @@
     "dev": "node --watch src/server.js",
     "db:setup": "node db/apply.js",
     "test": "npm run test:authz",
-    "test:authz": "node --test \"tests/authz/**/*.test.js\"",
+    "test:authz": "node tests/run-authz.js",
     "test:contract": "bash ../tests/contract/run.sh"
   },
   "keywords": [],
