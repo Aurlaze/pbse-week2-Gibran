@@ -23,7 +23,16 @@ REALM="${REALM:-badminton-booking}"
 ISSUER="$ISSUER_BASE/realms/$REALM"
 BASE="${BASE:-http://localhost:3000}"
 CLI_CLIENT="${CLI_CLIENT:-test-cli}"
-WEB_CLIENT="${WEB_CLIENT:-badminton-student-web}"
+
+# The rotation check below also uses test-cli, because it is the only client
+# in this realm with direct access grants enabled — the two real public
+# clients have them off, which is correct for a client that logs a user in
+# through a browser, but means a script cannot obtain a token from them.
+#
+# This does not weaken the check. revokeRefreshToken and refreshTokenMaxReuse
+# are realm-level settings, so rotation and reuse detection behave the same
+# whichever client asked for the token.
+WEB_CLIENT="${WEB_CLIENT:-test-cli}"
 USER_A="${USER_A:-student-a}"
 PASS_A="${PASS_A:-password}"
 
@@ -162,14 +171,13 @@ if [ "$KEYCLOAK_UP" = "1" ]; then
   RT1=$(curl -s -X POST "$ISSUER/protocol/openid-connect/token" \
     -d grant_type=password -d "client_id=$WEB_CLIENT" \
     -d "username=$USER_A" -d "password=$PASS_A" \
-    -d 'scope=openid bookings:read' | jget refresh_token)
+    -d 'scope=openid offline_access bookings:read' | jget refresh_token)
 
   if [ -z "$RT1" ]; then
     todo "could not obtain a refresh token from $WEB_CLIENT"
-    echo "         That client has direct access grants OFF, which is correct for"
-    echo "         a public client. To run this check, either complete one browser"
-    echo "         login and copy the refresh token into RT1, or temporarily enable"
-    echo "         direct grants on $WEB_CLIENT — development realm only."
+    echo "         Check that $WEB_CLIENT has direct access grants enabled and"
+    echo "         that $USER_A exists with password '$PASS_A'. Re-import the realm"
+    echo "         if this is an older container: docker compose down -v, then up."
   else
     ok "RT1 obtained"
 
