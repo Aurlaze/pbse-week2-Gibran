@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.2.1] — 2026-09-20
+
+Documentation only. No schema, no operation, no status code changed, so
+nothing a client relies on has moved.
+
+### Changed
+
+- **The L2 starter skeleton is gone.** The file carried its own instructions
+  — the `STARTER SKELETON` header, seven `TODO` markers, and a `Things` tag
+  the operations never used — into a document meant to be read by another
+  team.
+- **`servers` names the deployed service** (`https://pbse-week2.vercel.app/v1`)
+  instead of the `api.example.com` placeholder. The `localhost` entry was
+  removed with it: it advertised an address that exists on one machine to
+  every reader of the document. Local tooling takes its own base URL —
+  the contract runner reads `$BASE`, and `npm run mock` serves its own port.
+- **`info.description` describes this domain.** It previously stated
+  conventions for monetary amounts and currencies, of which this service has
+  neither. It now covers the timestamp and identifier conventions, the three
+  access checks, idempotency, and the state machine as a transition table.
+- **Tags declared and used consistently:** `Courts`, `Bookings` and a new
+  `Service` tag for `GET /health`, which was tagged `Courts` despite not
+  being a court operation.
+- `listCourts` and `deactivateCourt` state their obligations — what the list
+  includes, the difference between `isAvailable` and `status`, and that
+  retiring a court does not cancel bookings already made against it.
+
+### Not changed, deliberately
+
+- **Problem `type` URIs still read `https://api.example.com/problems/...`.**
+  They are identifiers, not addresses. RFC 9457 does not require a type URI
+  to resolve, clients branch on the exact string, and the policy below says
+  a published `type` never changes. Renaming them to match the deployment
+  would break every client and buy nothing.
+- `security-defined` and `no-server-example.com` are both back on in
+  `spec/redocly.yaml`, each having been switched off with a note to remove
+  it once there was something real to declare.
+
 ## [1.2.0] — 2026-09-20
 
 ### Added

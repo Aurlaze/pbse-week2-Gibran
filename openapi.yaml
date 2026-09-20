@@ -1,63 +1,117 @@
-# =====================================================================
-#  STARTER SKELETON — Meeting 2, Lab L2
-#
-#  This file lints clean as it stands. That is its only purpose: to
-#  prove your toolchain works before you have anything to lose.
-#
-#  Every line marked TODO is yours to replace with YOUR TEAM'S DOMAIN.
-#  Do not submit a file that still says "Thing". A specification that
-#  still contains this skeleton's nouns has not been done.
-#
-#  Work through 02-lab-L2-at-home.md alongside this file.
-# =====================================================================
-
 openapi: 3.1.0
 
 info:
-  # TODO: your domain.
   title: Badminton Court Booking API
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
-  version: 1.2.0
+  version: 1.2.1
   description: |
-    This server allows students and other users to view and book badminton courts.
-    All money amounts are whole numbers in the smallest unit of the currency.
-    ALl timestamps are RFC 3339 with a timezone offset.
-    CLients MUST ignore response fields they do not recognise, and MUST not crash when they see a status value they do not know.
-    TODO: one sentence — what this service is for, and for whom.
+    Books badminton courts at a university sports hall.
+
+    It is written for three kinds of caller: **students**, who browse the
+    courts and book, read and cancel their own slots; **administrators**,
+    who manage the courts themselves and can act on any booking; and a
+    **scheduled job** that runs nightly with no user present to tidy up
+    expired bookings.
 
     ## Conventions
 
-    All monetary amounts are integers in the minor unit of the stated
-    currency; the currency is carried explicitly beside every amount.
-    All timestamps are RFC 3339 with an explicit UTC offset, for
-    example 2026-03-04T12:10:04+07:00.
+    All timestamps are RFC 3339 with an explicit UTC offset, for example
+    `2026-03-04T12:10:04+07:00`. A booking covers a half-open interval: a
+    booking that ends at 19:00 does not overlap one that starts at 19:00.
+
+    All identifiers are opaque and server-generated, prefixed by the kind of
+    thing they name — `crt_` for a court, `bkg_` for a booking. They are
+    stable forever. Clients MUST NOT parse them or infer ordering from them.
 
     Clients MUST ignore unknown response fields. Clients MUST treat an
-    unrecognised enumeration value as the nearest non-terminal state
-    and MUST NOT crash on it. These two sentences are what make every
-    additive change to this interface legal.
+    unrecognised enumeration value as the nearest non-terminal state and
+    MUST NOT crash on it. These two sentences are what make every additive
+    change to this interface legal.
+
+    This service carries no monetary values. Courts are booked, not bought.
+
+    ## Access control
+
+    Every operation except `GET /health` requires an OAuth 2 access token,
+    and states the scope it needs. Three checks are applied in order:
+
+    1. the token is verified — an absent or unverifiable token is `401`;
+    2. the token's scopes are compared with the scope this operation
+       declares — a missing scope is `403`;
+    3. the handler checks the relationship between the caller and the object
+       named in the URL — a failure is `404`.
+
+    A booking that exists but belongs to another caller and a booking that
+    does not exist are answered **identically**: same status, same `type`,
+    same body. The two cases are deliberately indistinguishable, because a
+    difference between them would let a caller discover which identifiers
+    are real by trying them.
+
+    Holding a scope is not the same as owning an object. A token carrying
+    `bookings:read` permits booking-reading operations; it does not make
+    every booking the caller's.
 
     ## Idempotency
 
-    The Idempotency-Key header is required for booking requests, and its value must be a version-4 UUID with hyphens.
-    Itâ€™s required on POST /v1/bookings, because creating a badminton court booking is a consequential operation that must not happen twice.
-    Keys are kept for 24 hours. A key reused after that period is treated as new.
-    The server returns 409 Conflict with the problem type https://api.example.com/problems/idempotency-key-reuse.
+    `POST /v1/bookings` requires an `Idempotency-Key` header whose value is
+    a version-4 UUID with hyphens. Creating a booking is consequential and
+    must not happen twice because a client retried.
+
+    Clients MUST generate the key when the user confirms the booking, and
+    MUST reuse the same key for every retry of that same intent. Keys are
+    retained 24 hours; a key reused after that window is treated as new.
+    Reusing a key with a *different* body returns `409` with the problem
+    type `https://api.example.com/problems/idempotency-key-reuse`.
 
     ## State machine
 
-    TODO: the transition table from Worksheet W4. Any pair of statuses
-    not listed there is illegal and returns 409 illegal-transition.
+    Both resources have two states and one transition each. A transition is
+    a sub-resource with a noun URI, so it can carry a reason, return who and
+    when, and be read back later.
+
+    | Resource | From | Operation | To | Response |
+    |---|---|---|---|---|
+    | Booking | `confirmed` | `POST /v1/bookings/{bookingId}/cancellation` | `cancelled` | `201` with the cancellation record |
+    | Booking | `cancelled` | the same operation again | `cancelled` | `200` with the existing record |
+    | Court | `active` | `POST /v1/courts/{courtId}/retirement` | `retired` | `201` with the retirement record |
+    | Court | `retired` | the same operation again | `retired` | `200` with the existing record |
+
+    Re-requesting a transition that has already happened is `200`, not
+    `409`: the end state the caller asked for already holds, so their
+    intent has been satisfied and nothing is in conflict.
+
+    Any pair of statuses not listed above is illegal and returns `409` with
+    the problem type `https://api.example.com/problems/illegal-transition`.
+    There is no operation that un-cancels a booking or un-retires a court;
+    both terminal states are final.
+
+    A retired court cannot be booked. `POST /v1/bookings` naming one returns
+    `409 court-slot-unavailable`, as does a slot that overlaps an existing
+    confirmed booking.
 
 servers:
-  - url: https://api.example.com/v1
-    description: Production — does not exist yet. That is Meeting 3.
-  - url: http://localhost:8080/v1
-    description: Local development
+  # Only the deployed service is listed. A localhost entry would advertise
+  # an address that exists on one developer's machine and nowhere else, to
+  # every client that reads this document. Local tooling takes its own base
+  # URL instead: the contract runner reads $BASE, and `npm run mock` in
+  # spec/ serves this document on a port of its own.
+  - url: https://pbse-week2.vercel.app/v1
+    description: Production
 
 tags:
-  - name: Things
-    description: This API manages badminton court bookings and provides operations for creating, retrieving, and managing bookings.
+  - name: Courts
+    description: |
+      The badminton courts themselves. Reference data: every authenticated
+      caller holding `courts:read` sees the same courts, so these
+      operations have no object-level owner. Changing a court requires
+      `courts:write`, which only administrators are granted.
+  - name: Bookings
+    description: |
+      A reservation of one court for one interval. Bookings are owned: the
+      caller who created one may read and cancel it, and nobody else may,
+      unless they hold `bookings:fulfil`.
+  - name: Service
+    description: Operational endpoints, called by the hosting platform rather than by a user.
 
 # -------------------------------------------------------------------
 # Document-level security: narrowest scope applied to all routes by default
@@ -76,7 +130,7 @@ paths:
     get:
       operationId: health
       summary: Liveness check
-      tags: [Courts]
+      tags: [Service]
       description: |
         Answers without touching the database, on purpose. A check that
         queried Postgres would make one brief outage look like a total
@@ -113,10 +167,21 @@ paths:
       summary: List badminton courts
       tags: [Courts]
       description: |
-        TODO: the obligations live here, not in the summary. Say what
-        is included and what is not — for example, whether closed or
-        inactive items appear in the list, so that clients can display
-        them greyed out rather than silently omitting them.
+        Returns every court, in both statuses. Retired courts are included
+        on purpose, so a client can show them greyed out with a reason
+        rather than having them vanish between one page load and the next.
+        Filter with `status=active` when only bookable courts are wanted.
+
+        `isAvailable` and `status` answer different questions and a client
+        needs both. `status: retired` is permanent — the court is gone from
+        service. `isAvailable: false` on an `active` court is temporary,
+        for example while it is being resurfaced. Only a court that is
+        `active` **and** `isAvailable` can be booked; either one being
+        false makes `POST /v1/bookings` answer `409`.
+
+        The list is not ordered by any field a client should rely on
+        beyond the pagination cursor. Removing the `status` filter returns
+        more courts, never a different kind of thing.
       parameters:
         - name: status
           in: query
@@ -425,12 +490,21 @@ paths:
       security:
         - oauth2: [courts:write]
       description: |
-        TODO: your own transition. Note that the transition carries a
-        body of its own (the reason), a response of its own (who and
-        when), and can be read back later with GET — none of which a
-        verb in the URI would give you.
+        Takes a court permanently out of service. Retirement is the only
+        transition a court has, and it is terminal: there is no operation
+        that returns a retired court to `active`.
 
-        Re-sending this when the thing is ALREADY retired returns 200
+        The retirement is a sub-resource rather than a verb in the URI, and
+        rather than a `PATCH` setting `status`. That buys three things a
+        verb would not: it carries a body of its own (why the court was
+        retired), it returns a record of its own (the reason and the
+        timestamp), and that record can be read back afterwards.
+
+        Existing bookings on a retired court are left alone — retiring a
+        court stops new bookings, it does not cancel the ones already made.
+        Cancelling those is a separate decision and a separate request.
+
+        Re-sending this when the court is ALREADY retired returns 200
         with the existing record, not 409. The requested end state
         already holds and the caller's intent has been satisfied.
       requestBody:
@@ -526,10 +600,10 @@ components:
   schemas:
 
     # ---------------------------------------------------------------
-    # TODO: replace with your resources from Worksheet W1. You need at
-    # least THREE, each with a required array and an example on EVERY
-    # property. A blank example is what the Meeting 7 partner team
-    # will complain about.
+    # The domain's four resources. Court and Booking are the things this
+    # service stores; Cancellation and Retirement are the records a state
+    # transition produces, which is why each is a schema of its own rather
+    # than a status field somewhere.
     # ---------------------------------------------------------------
     Court:
       type: object

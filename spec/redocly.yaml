@@ -16,11 +16,16 @@ rules:
   # back on, so an operation added without a security entry is a lint
   # failure rather than a silently unprotected route.
 
-  # Your service is not deployed until Meeting 3, so the only honest
-  # server URLs today are a placeholder and localhost.
-  # >>> Replace the placeholder with your real URL in Meeting 3 and
-  # >>> delete this line.
-  no-server-example.com: off
+  # no-server-example.com was off while `servers:` still held a
+  # placeholder. It now names the real deployment, so the rule is back on
+  # and a placeholder URL cannot reappear unnoticed.
+  #
+  # Note that `https://api.example.com/problems/...` still appears in the
+  # document, as the `type` member of every Problem. Those are identifiers,
+  # not addresses: RFC 9457 does not require a type URI to resolve, clients
+  # branch on the exact string, and the compatibility policy in
+  # CHANGELOG.md says a published `type` never changes. Renaming them to
+  # match the deployment would break every client for no gain.
 
   # A licence matters for a published API. Not for a course project.
   info-license: off
