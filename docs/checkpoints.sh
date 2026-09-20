@@ -143,7 +143,7 @@ if [ "$KEYCLOAK_UP" = "1" ]; then
   TOKEN_A=$(curl -s -X POST "$ISSUER/protocol/openid-connect/token" \
     -d grant_type=password -d "client_id=$CLI_CLIENT" \
     -d "username=$USER_A" -d "password=$PASS_A" \
-    -d 'scope=openid bookings:read bookings:write' | jget access_token)
+    -d 'scope=openid courts:read' | jget access_token)
 
   if [ -n "$TOKEN_A" ]; then
     ok "token issued"
@@ -171,7 +171,7 @@ if [ "$KEYCLOAK_UP" = "1" ]; then
   RT1=$(curl -s -X POST "$ISSUER/protocol/openid-connect/token" \
     -d grant_type=password -d "client_id=$WEB_CLIENT" \
     -d "username=$USER_A" -d "password=$PASS_A" \
-    -d 'scope=openid offline_access bookings:read' | jget refresh_token)
+    -d 'scope=openid offline_access courts:read' | jget refresh_token)
 
   if [ -z "$RT1" ]; then
     todo "could not obtain a refresh token from $WEB_CLIENT"

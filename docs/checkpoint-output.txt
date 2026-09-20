@@ -1,0 +1,81 @@
+
+------------------------------------------------------------
+0 . Is anything actually running?
+------------------------------------------------------------
+
+  PASS   Keycloak is up at http://localhost:8080/realms/badminton-booking
+  the service is NOT answering at http://localhost:3000 — start it with: cd service && npm start
+
+------------------------------------------------------------
+3h . Discovery document and one real token   [PASTE INTO ADR section 1]
+------------------------------------------------------------
+
+  Discovery:
+    {
+      "issuer": "http://localhost:8080/realms/badminton-booking",
+      "jwks_uri": "http://localhost:8080/realms/badminton-booking/protocol/openid-connect/certs"
+    }
+
+  Access token for student-a via the manual-inspection client:
+  PASS   token issued
+    {
+      "iss": "http://localhost:8080/realms/badminton-booking",
+      "aud": [
+        "badminton-api",
+        "account"
+      ],
+      "exp": 1789916848,
+      "sub": "bcf05c9c-2927-45a5-8636-bf94156356d1",
+      "scope": "openid profile email courts:read",
+      "azp": "test-cli",
+      "preferred_username": "student-a"
+    }
+
+  ^ Step 6b: confirm which claim marks a client-credentials token.
+    src/auth/principal.js reads client_id / clientId, then falls back to a
+    preferred_username beginning 'service-account-'. If a token issued
+    through Client Credentials carries neither, principal.js needs fixing.
+
+------------------------------------------------------------
+10b . Refresh rotation and reuse detection   [PASTE INTO ADR section 6]
+------------------------------------------------------------
+
+  PASS   RT1 obtained
+  PASS   1. rotation is working - RT2 differs from RT1
+  PASS   2. reusing the spent RT1 is refused -> invalid_grant
+  PASS   3. RT2 is ALSO refused -> invalid_grant   (the whole family was revoked)
+
+  Setting enabled on the realm:
+    revokeRefreshToken = true, refreshTokenMaxReuse = 0
+
+------------------------------------------------------------
+7 . A missing scope is refused before any query   [PASTE INTO ADR section 4]
+------------------------------------------------------------
+
+  MANUAL skipped: needs both the service and a token
+
+------------------------------------------------------------
+12d . Pre-demonstration checklist
+------------------------------------------------------------
+
+  MANUAL skipped: the service is not running
+
+------------------------------------------------------------
+9 . No token in any log   [PASTE INTO ADR section 7]
+------------------------------------------------------------
+
+  MANUAL no local log files found; check the hosting platform's console output too
+
+  No client secret in any public client:
+  PASS   clean - no client secret committed
+
+------------------------------------------------------------
+pass 7 . fail 0 . manual 3
+
+------------------------------------------------------------
+
+Next:
+  1. Paste the marked sections into docs/decisions/0003-autentikasi.md
+  2. Anything marked MANUAL still needs a human
+  3. Push, confirm the GitHub run is green, then: git tag l4 && git push --tags
+
