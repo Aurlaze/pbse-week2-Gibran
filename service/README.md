@@ -150,6 +150,58 @@ Column names are internal; response field names are the contract's. The
 representation function connects the two — `bookings.created_at` exists in the
 table and deliberately never appears in a response.
 
+## Object-level access checks
+
+Every handler that names an object checks the relationship between the caller
+and that object, after the scope check and before the representation. A row
+here without a written ownership rule would be an unfixed defect.
+
+| Operation | Object named | Ownership rule |
+|---|---|---|
+| `GET /v1/bookings/{bookingId}` | booking | the booking's own student, or a caller holding `bookings:fulfil` |
+| `POST /v1/bookings/{bookingId}/cancellation` | booking | the booking's own student, or a caller holding `bookings:fulfil`; checked **before** the update |
+| `GET /v1/bookings` | collection | constrained inside the query — `WHERE booked_by = $1`, or unconstrained for `bookings:fulfil` |
+| `POST /v1/bookings` | none | creates an object; `booked_by` is taken from the token, never from the body |
+| `GET /v1/courts`, `GET /v1/courts/{courtId}` | court | none — courts are shared reference data, readable by any caller holding `courts:read` |
+| `POST /v1/courts/{courtId}/retirement` | court | **mock** — no handler exists yet; `courts:write` is the only gate when it is written |
+
+The rules themselves live in one file,
+[`src/auth/ownership.js`](src/auth/ownership.js), so they can be read without
+reading the handlers and tested without HTTP.
+
+### Why a refused object check is 404 and not 403
+
+`GET /v1/bookings/{bookingId}` answers identically whether the booking does
+not exist or exists and belongs to somebody else — same status, same `type`,
+same `detail`, same body. Both go through one `notFound()` function in
+[`src/routes/bookings.js`](src/routes/bookings.js) precisely so they cannot
+drift apart.
+
+Two different statuses would let anyone holding any valid token walk the
+identifier space and learn which booking ids are real, even though every
+single request was refused. Matching the status but varying the wording
+leaks the same information through the body, which is why the check is a
+`diff` of the two responses and not a comparison of two status codes:
+
+```bash
+diff <(curl -s -H "Authorization: Bearer $TOKEN_A" "$BASE/v1/bookings/$OWNED_BY_B") \
+     <(curl -s -H "Authorization: Bearer $TOKEN_A" "$BASE/v1/bookings/bkg_doesNotExist") \
+  && echo "both responses are identical"
+```
+
+This is separate from the `403` that `requireScope` returns. That refusal is
+decided entirely by the contents of the caller's own token, without loading a
+single row, so it cannot reveal whether any particular booking exists. The
+two statuses answer two different questions and are consistent, not
+contradictory:
+
+| Condition | Layer | Status |
+|---|:--:|---:|
+| No token, or the token cannot be verified | 1 | `401` |
+| Valid token, required scope absent | 2 | `403` |
+| The object does not exist | 3 | `404` |
+| The object exists but is not the caller's | 3 | `404` |
+
 ## Authentication Scopes
 
 | Scope | Permits | Student | Admin | Job |

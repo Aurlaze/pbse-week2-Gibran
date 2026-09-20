@@ -4,8 +4,9 @@ Audit of the repository at commit `0f1375c` against the Session 4 handout (Steps
 
 **Legend:** ✅ done · ⚠️ partial (exists, but the checkpoint would not pass) · ❌ not started
 
-Current standing against the marking criteria: **PARTIAL** — the object check is absent
-everywhere, and no negative tests exist.
+Current standing against the marking criteria: **PARTIAL** — Layer 3 now exists in every
+handler that names an object (Phase 4). The remaining gap to PASS is Step 11's four
+negative tests.
 
 ---
 
@@ -18,11 +19,11 @@ everywhere, and no negative tests exist.
 | 2 | Scope vocabulary designed | ✅ | 2 scopes unused |
 | 3 | Auth server running; clients and test users registered | ⚠️ | Zero test users; 2 scopes missing |
 | 4 | Security declared on the contract | ✅ | Lint valid; 1 accepted warning |
-| 5 | Auth file skeleton and configuration | ⚠️ | `ownership.js` missing |
-| 6 | Layer 1 — authentication working | ⚠️ | `principal.kind` broken; no `WWW-Authenticate` |
-| 7 | Layer 2 — scope checking working | ✅ | No header on the 403 |
-| 8 | **Layer 3 — object check in every handler** | ❌ | **Nothing exists** |
-| 9 | Tokens never appear in logs | ⚠️ | True by accident, no redaction boundary |
+| 5 | Auth file skeleton and configuration | ✅ | — |
+| 6 | Layer 1 — authentication working | ✅ | — |
+| 7 | Layer 2 — scope checking working | ✅ | — |
+| 8 | **Layer 3 — object check in every handler** | ✅ | Verified, including the identical-404 diff |
+| 9 | Tokens never appear in logs | ✅ | `logger.js` redacts at the boundary |
 | 10 | Refresh rotation and reuse detection demonstrated | ⚠️ | Configured, evidence not captured |
 | 11 | Four negative tests pass | ❌ | No test suite at all |
 | 12 | CI green, demonstration, tag `l4` | ⚠️ | 12a/12b done; ADR, checklist and tag left |
@@ -31,7 +32,7 @@ everywhere, and no negative tests exist.
 
 | # | Problem | Evidence |
 |---|---|---|
-| 1 | **Object-level authorisation does not exist.** No `ownership.js`, no owner column on `bookings`, and no route names a booking object — `POST /v1/bookings` is the only booking operation, so there is nothing for Layer 3 to guard. | `service/src/routes/bookings.js`, `service/db/schema.sql` |
+| 1 | ~~Object-level authorisation does not exist.~~ **Fixed in Phase 4.** `booked_by` column, three booking object operations, `ownership.js`, and identical 404s verified byte-for-byte. | `service/src/auth/ownership.js` |
 | 2 | **No authorisation tests.** No `tests/authz/`, no test runner installed, `npm test` still exits 1. | `service/package.json` |
 | 3 | ~~CI cannot start the service.~~ **Fixed.** The job env now carries `DATABASE_URL` and the three `OIDC_*` vars, a test JWKS server starts before the service, and both the contract suite and the idempotency replay send a token. | `.github/workflows/contract.yml` |
 
@@ -93,9 +94,9 @@ everywhere, and no negative tests exist.
 | `auth/principal.js` | ✅ | Exists; see the Step 6 defect |
 | `auth/authenticate.js` | ✅ | — |
 | `auth/require-scope.js` | ✅ | — |
-| `auth/ownership.js` | ❌ | **Does not exist** |
+| `auth/ownership.js` | ✅ | `mayReadBooking`, `mayCancelBooking`, `isFulfiller` |
 | `config.js` refuses to start on a missing variable | ✅ | Checks all four required vars |
-| `problem.js` 401 / 403 helpers | ⚠️ | Slugs exist, but **no `unauthorized()` / `forbidden()` helpers and no response ever sets `WWW-Authenticate`**, which `openapi.yaml` documents. Also rename `insufficient_scope` → `insufficient-scope` to match every other slug |
+| `problem.js` 401 / 403 helpers | ✅ | `unauthorized()` and `forbidden()` added, both set `WWW-Authenticate`; slug renamed to `insufficient-scope` |
 
 ## Step 6 — Layer 1: authentication
 
@@ -106,9 +107,9 @@ everywhere, and no negative tests exist.
 | Middleware installed before `/v1`, after `/health` | ✅ | `src/app.js` |
 | Anonymous request gets `req.principal = null` | ✅ | `auth/authenticate.js` |
 | Refusal reason logged, token never logged | ✅ | `auth/authenticate.js` |
-| Principal carries a correct `kind` | ❌ | **`principal.js:4` reads `claims.kind`, a claim Keycloak never issues** — always `undefined`. Derive it from a real token (`sub === azp`, or presence of `client_id`) |
-| `WWW-Authenticate` on the 401 | ❌ | Not set |
-| `clockTolerance: 5` | ⚠️ | Optional; not set |
+| Principal carries a correct `kind` | ⚠️ | Now derived from `client_id`/`clientId` or a `service-account-` username. **Still to confirm against a real client-credentials token** from your Keycloak |
+| `WWW-Authenticate` on the 401 | ✅ | `Bearer error="invalid_token"`, verified |
+| `clockTolerance: 5` | ✅ | Set |
 | Checkpoint: no token → 401, edited payload → 401, valid → 200/404, `/health` → 200 | ✅ | Verified locally: `/health` and `/v1/health` → 200; no token, garbage token and **edited payload** all → 401, so the signature is genuinely checked |
 
 ## Step 7 — Layer 2: the scope check
@@ -118,31 +119,36 @@ everywhere, and no negative tests exist.
 | `requireScope` returns 401 without a principal, 403 on a missing scope | ✅ | `auth/require-scope.js` |
 | Installed on every route with the contract's exact strings | ✅ | `routes/courts.js`, `routes/bookings.js` |
 | Scope checked before any object is loaded | ✅ | Middleware runs before the handler |
-| `WWW-Authenticate: ... insufficient_scope` on the 403 | ❌ | Not set (same fix as Step 5) |
+| `WWW-Authenticate: ... insufficient_scope` on the 403 | ✅ | Names the missing scope, verified |
 | Checkpoint, including "stop the database, still 403" | ❌ | Not recorded |
 
-## Step 8 — Layer 3: the object check ❌
-
-Nothing in this step exists. The most heavily assessed layer.
+## Step 8 — Layer 3: the object check ✅
 
 | Item | Status | Where / what to do |
 |---|:--:|---|
-| Bookings have an owner | ❌ | Add a `booked_by` (subject) column to `db/schema.sql`, write it from `req.principal.subject` in `createBooking`, seed rows for two students |
-| A route that names a booking object | ❌ | Add `GET /v1/bookings/{bookingId}` (`bookings:read`) and a cancel transition (`bookings:write`) — contract first, then handler |
-| Collection constrained inside the query | ❌ | `GET /v1/bookings` with `WHERE booked_by = $1` (or the wider `bookings:fulfil` branch) — never filtered in JavaScript after the query |
-| `auth/ownership.js` predicates | ❌ | `mayReadBooking(principal, booking)` in one place |
-| Five-line pattern in every handler | ❌ | validate → load → absent 404 → not-yours **identical** 404 → represent |
-| Check runs before the write on the cancel operation | ❌ | — |
-| 8a ownership inventory table | ❌ | Operation / object named / ownership rule, in `service/README.md` |
-| 8e Representations follow the caller's role | ❌ | — |
-| Checkpoint: `diff` of the two 404 bodies is empty | ❌ | — |
+| Bookings have an owner | ✅ | `booked_by` column in `db/schema.sql`, written from `req.principal.subject`, never from the body. Added with `ALTER TABLE ... IF NOT EXISTS` so the file still builds from empty *and* upgrades a deployed database |
+| A route that names a booking object | ✅ | `GET /v1/bookings/{bookingId}` and `POST /v1/bookings/{bookingId}/cancellation` |
+| Collection constrained inside the query | ✅ | `listForPrincipal` builds the `WHERE` clause; `bookings:fulfil` widens it. Nothing is filtered in JavaScript |
+| `auth/ownership.js` predicates | ✅ | `mayReadBooking`, `mayCancelBooking`, `isFulfiller` |
+| Five-line pattern in every handler | ✅ | validate → load → absent 404 → not-yours 404 → represent |
+| Both 404s are byte-identical | ✅ | One `notFound()` function serves both branches. Verified: the two bodies differ only in `instance` |
+| Check runs before the write on cancellation | ✅ | Verified — a refused cancel leaves `status` at `confirmed` |
+| 8a ownership inventory table | ✅ | `service/README.md`, including the two operations that name no object |
+| 8e Representations follow the caller's role | ✅ | `bookedBy` is emitted only to callers holding `bookings:fulfil`; documented as optional on the `Booking` schema |
+| Checkpoint: `diff` of the two 404 bodies is empty | ✅ | Verified against the handlers with a stubbed store |
+
+**Still to do against a real database.** Every check above ran with the store
+stubbed, because the only database this repo is configured against is the
+team's shared Neon instance. Before the demonstration, apply `db/schema.sql`
+(the `ALTER TABLE` lines are additive and safe to re-run) and repeat the
+`diff` from `service/README.md` against the running service.
 
 ## Step 9 — Tokens never reach the logs
 
 | Item | Status | Where / what to do |
 |---|:--:|---|
 | No token currently reaches a log | ✅ | `authenticate.js` logs `err.code`; the error handler logs method/url/requestId, not headers |
-| Redaction at the logging boundary | ❌ | No `logger.js` exists — the property holds by accident, so the next `console.log(req)` breaks it. Add pino with `redact: ['req.headers.authorization', ...]` |
+| Redaction at the logging boundary | ✅ | `src/logger.js` (pino) redacts `authorization`, `cookie`, `set-cookie` and token-shaped keys; serialisers drop headers entirely |
 | Tokens never query parameters | ✅ | — |
 | Checkpoint: `grep` over the logs recorded | ❌ | Not run |
 

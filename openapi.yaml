@@ -594,6 +594,18 @@ components:
           type: string
           enum: [confirmed, cancelled]
           example: confirmed
+        bookedBy:
+          type: string
+          description: |
+            The subject identifier of the caller who created this booking.
+
+            Present only for callers holding `bookings:fulfil` —
+            administrators and the scheduled cleanup job — who need to know
+            whose booking they are acting on. A student reading their own
+            booking does not receive this field, because it would tell them
+            nothing they do not already know while making every other
+            caller's identifier reachable through a shared representation.
+          example: 6f1c9d2a-4b77-4c1e-9f0a-2d8b51e3ac10
 
     Cancellation:
       type: object
