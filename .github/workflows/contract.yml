@@ -125,6 +125,16 @@ jobs:
         env:
           BASE: http://localhost:3000/v1
 
+      # Step 12a: the authorisation tests run on every push, in the same
+      # pipeline as the contract tests, so the boundary closed in Session 4
+      # cannot reopen without this job going red.
+      #
+      # These start their own service in-process against their own test key,
+      # so they do not use the one started above.
+      - name: Authorisation tests
+        run: npm run test:authz
+        working-directory: service
+
       - name: Service log
         if: always()
         run: |

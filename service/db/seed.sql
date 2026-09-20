@@ -1,8 +1,14 @@
+-- ON CONFLICT DO NOTHING so this file can be re-run against a database that
+-- already has rows. docs/deployment.md tells you to run `npm run db:setup`,
+-- and without this the second run fails on a duplicate key — which is
+-- exactly when you need it, because schema.sql now also carries the
+-- ALTER TABLE statements that bring an existing database up to date.
 INSERT INTO courts (id, name, location, court_type, is_available, status)
 VALUES
     ('crt_51Fa93cD', 'Court 1', 'UGM Sports Hall', 'indoor', true, 'active'),
     ('crt_72Kb14xP', 'Court 2', 'UGM Sports Hall', 'indoor', true, 'active'),
-    ('crt_93Lm27qR', 'Court 3', 'UGM Sports Hall', 'indoor', false, 'active');
+    ('crt_93Lm27qR', 'Court 3', 'UGM Sports Hall', 'indoor', false, 'active')
+ON CONFLICT (id) DO NOTHING;
 
 -- Two bookings owned by two different students, so the object check has
 -- something to refuse without a test having to create it first. These are

@@ -150,6 +150,62 @@ Column names are internal; response field names are the contract's. The
 representation function connects the two — `bookings.created_at` exists in the
 table and deliberately never appears in a response.
 
+## Running the authorisation server
+
+This service is a *resource server*. It never receives a password and never
+issues a token; it only verifies the ones it is given.
+
+```bash
+cd infra
+KC_ADMIN_PASSWORD=<choose one> docker compose -f docker-compose.auth.yml up
+```
+
+The realm in `infra/keycloak/` is imported on start: the scopes from the table
+below, two public clients using Authorization Code + PKCE with no secret, one
+confidential client for the scheduled job, refresh-token rotation with reuse
+detection, and six test users.
+
+| User | Password | Used by |
+|---|---|---|
+| `student-a`, `student-b` | `password` | a student reading or cancelling another student's booking |
+| `admin-a`, `admin-b` | `password` | administrative access across owners |
+| `staff-a`, `staff-b` | `password` | the remaining boundary |
+
+Those passwords are development values for a realm that only ever runs on
+`localhost`. They are committed because they are not secrets — a credential
+that is committed is a credential that is published, so nothing that guards
+anything real is ever written here. The confidential client's secret is *not*
+in the realm file for that reason; it is generated on import and read from the
+Keycloak console.
+
+Then point the service at it:
+
+```bash
+OIDC_ISSUER=http://localhost:8080/realms/badminton-booking
+OIDC_JWKS_URI=http://localhost:8080/realms/badminton-booking/protocol/openid-connect/certs
+OIDC_AUDIENCE=badminton-api
+```
+
+`OIDC_AUDIENCE` is what stops a token issued for a different API in the same
+realm from being accepted here.
+
+## Tests
+
+```bash
+npm run test:authz      # authorisation: needs a throwaway Postgres in DATABASE_URL
+npm run test:contract   # schemathesis against openapi.yaml; needs TOKEN and a running service
+```
+
+`tests/authz/` needs no authorisation server. It generates its own key pair
+and serves the JWKS from a server inside the test process, so CI needs no
+network and the suite cannot go flaky because a container was slow. The issuer
+under test is `https://test.local/`, so a token minted by the suite is refused
+by any real deployment.
+
+`DATABASE_URL` must point at a database you are willing to have rows written
+into and deleted from. The suite creates its own fixtures and removes them
+afterwards, but it is not the place to point at anything shared.
+
 ## Object-level access checks
 
 Every handler that names an object checks the relationship between the caller

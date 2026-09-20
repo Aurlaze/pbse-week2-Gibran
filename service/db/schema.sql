@@ -1,4 +1,8 @@
-CREATE TABLE courts (
+-- IF NOT EXISTS on every statement in this file, so it can be run against an
+-- empty database to build the schema and against a deployed one to bring it
+-- up to date. Without it `npm run db:setup` — the command docs/deployment.md
+-- tells you to run — fails on the second run.
+CREATE TABLE IF NOT EXISTS courts (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     location VARCHAR(150) NOT NULL,
