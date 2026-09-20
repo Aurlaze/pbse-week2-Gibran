@@ -107,22 +107,34 @@ test("a student's booking list contains no other student's bookings", async () =
   const mine = await service.givenBookingOwnedBy("student-a");
   const theirs = await service.givenBookingOwnedBy("student-b");
 
-  const response = await service.request("GET", "/v1/bookings?limit=100", {
-    token: tokenA
-  });
+  // Every page, not just the first. A database that has accumulated rows
+  // would otherwise push this test's own booking past the end of page one,
+  // and the assertion would start failing for a reason that has nothing to
+  // do with authorisation.
+  const seen = [];
+  let cursor;
+  let pages = 0;
 
-  assert.equal(response.status, 200);
+  do {
+    const path = `/v1/bookings?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+    const response = await service.request("GET", path, { token: tokenA });
 
-  const ids = response.body.items.map((item) => item.id);
+    assert.equal(response.status, 200);
+    seen.push(...response.body.items);
+    cursor = response.body.nextCursor;
+    pages += 1;
+  } while (cursor && pages < 50);
+
+  const ids = seen.map((item) => item.id);
   assert.ok(ids.includes(mine.id), "the caller's own booking should be listed");
   assert.ok(
     !ids.includes(theirs.id),
-    "another student's booking must not appear in this page"
+    "another student's booking must not appear in any page"
   );
 
-  // Nothing in the page may belong to anybody else, not merely the one row
-  // this test created.
-  for (const item of response.body.items) {
+  // Nothing returned may belong to anybody else, not merely the one row this
+  // test created.
+  for (const item of seen) {
     const row = await service.readBookingRow(item.id);
     assert.equal(row.booked_by, "student-a");
   }

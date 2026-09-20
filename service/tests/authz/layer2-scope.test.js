@@ -78,6 +78,49 @@ test("the scope refusal happens before any object is loaded", async () => {
   assert.equal(response.status, 403);
 });
 
+// Found by the contract fuzzer, not by a test written in advance: a `reason`
+// containing a NUL byte satisfied the contract as it was then written,
+// reached the database, and came back as a 500. A 500 on a request the
+// caller controls is a way to probe the service's internals, so the
+// regression is kept here with the rest of the refusals.
+test("a cancellation reason carrying control characters is a 400", async () => {
+  const token = await signInAs("student-a", ["bookings:read", "bookings:write"]);
+  const booking = await service.givenBookingOwnedBy("student-a");
+
+  for (const reason of ["has a \u0000 nul byte", "vertical \u000b tab", "   ", "x".repeat(501)]) {
+    const response = await service.request(
+      "POST",
+      `/v1/bookings/${booking.id}/cancellation`,
+      { token, body: { reason } }
+    );
+
+    assert.equal(
+      response.status,
+      400,
+      `expected 400 for ${JSON.stringify(reason.slice(0, 24))}, got ${response.status}`
+    );
+    assert.deepEqual(response.body.invalidFields, ["reason"]);
+  }
+
+  // The booking is untouched by any of them.
+  const row = await service.readBookingRow(booking.id);
+  assert.equal(row.status, "confirmed");
+});
+
+test("a cancellation with no reason at all is a 400, not a 500", async () => {
+  const token = await signInAs("student-a", ["bookings:read", "bookings:write"]);
+  const booking = await service.givenBookingOwnedBy("student-a");
+
+  for (const body of [{}, { reason: 216 }, { reason: null }, []]) {
+    const response = await service.request(
+      "POST",
+      `/v1/bookings/${booking.id}/cancellation`,
+      { token, body }
+    );
+    assert.equal(response.status, 400, `body ${JSON.stringify(body)}`);
+  }
+});
+
 test("the 403 body is Problem Details and names the missing scope", async () => {
   const courtsOnly = await signInAs("student-a", ["courts:read"]);
 

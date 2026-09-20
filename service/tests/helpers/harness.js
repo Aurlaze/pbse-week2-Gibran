@@ -116,10 +116,23 @@ async function startTestService() {
     };
   }
 
+  // Best-effort cleanup of this file's own rows. A failing assertion must
+  // not also leave fixtures behind, because the next run would then be
+  // testing against a table that grows every time somebody runs the suite.
+  //
+  // The court is deliberately NOT removed here. Test files run in parallel
+  // processes, so deleting a fixture another file is still using turns a
+  // passing suite into a foreign-key failure. It is one row, it is created
+  // with ON CONFLICT DO NOTHING, and it costs nothing to leave in place.
   async function stop() {
-    if (createdBookings.length > 0) {
-      await pool.query("DELETE FROM bookings WHERE id = ANY($1)", [createdBookings]);
+    try {
+      if (createdBookings.length > 0) {
+        await pool.query("DELETE FROM bookings WHERE id = ANY($1)", [createdBookings]);
+      }
+    } catch (err) {
+      console.error("fixture cleanup failed:", err.message);
     }
+
     server.close();
     await jwks.close();
     await pool.end();

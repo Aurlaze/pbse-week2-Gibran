@@ -15,7 +15,11 @@ const {
   toBookingRepresentation,
   toCancellationRepresentation
 } = require("../representations/bookings");
-const { parseNewBooking, isValidIdempotencyKey } = require("../schemas/bookings");
+const {
+  parseNewBooking,
+  parseCancellation,
+  isValidIdempotencyKey
+} = require("../schemas/bookings");
 const { problem } = require("../problem");
 const requireScope = require("../auth/require-scope");
 const { mayReadBooking, mayCancelBooking } = require("../auth/ownership");
@@ -290,14 +294,17 @@ router.post(
       });
     }
 
-    const reason = req.body?.reason;
+    const parsed = parseCancellation(req.body);
 
-    if (typeof reason !== "string" || reason.trim() === "") {
+    if (!parsed.ok) {
       return problem(res, 400, "malformed-request", {
-        detail: "reason is required and must be a non-empty string",
-        invalidFields: ["reason"]
+        detail:
+          "reason is required: 1 to 500 characters, with no control characters",
+        invalidFields: parsed.invalidFields
       });
     }
+
+    const { reason } = parsed.data;
 
     // 2. load the object
     const booking = await findBookingById(bookingId);
@@ -318,7 +325,7 @@ router.post(
     // requested end state already holds, so the caller's intent has been
     // satisfied. The UPDATE guards on status = 'confirmed', so it touches
     // no row in that case and returns nothing.
-    const cancelled = await cancelBooking(bookingId, reason.trim());
+    const cancelled = await cancelBooking(bookingId, reason);
 
     if (!cancelled) {
       return res.status(200).json(toCancellationRepresentation(booking));

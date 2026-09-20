@@ -59,7 +59,43 @@ function parseNewBooking(body) {
   };
 }
 
+// Control characters, NUL included. A NUL byte cannot be stored in a
+// Postgres text column at all: the driver sends it, the server refuses the
+// whole statement, and the handler that was merely passing a string along
+// ends up answering 500 to a request that was never valid in the first
+// place. Rejecting it here makes that a 400, which is what it always was.
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
+
+const REASON_MAX_LENGTH = 500;
+
+// Matches the cancellation requestBody in openapi.yaml.
+function parseCancellation(body) {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, invalidFields: ["body"] };
+  }
+
+  const { reason } = body;
+
+  if (typeof reason !== "string") {
+    return { ok: false, invalidFields: ["reason"] };
+  }
+
+  const trimmed = reason.trim();
+
+  if (
+    trimmed === "" ||
+    trimmed.length > REASON_MAX_LENGTH ||
+    CONTROL_CHARACTERS.test(trimmed)
+  ) {
+    return { ok: false, invalidFields: ["reason"] };
+  }
+
+  return { ok: true, data: { reason: trimmed } };
+}
+
 module.exports = {
   parseNewBooking,
-  isValidIdempotencyKey
+  parseCancellation,
+  isValidIdempotencyKey,
+  REASON_MAX_LENGTH
 };
