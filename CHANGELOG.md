@@ -1,12 +1,40 @@
 # Changelog
 
+## [1.2.0] — 2026-09-20
+
+### Added
+
+- **`GET /v1/bookings`, `GET /v1/bookings/{bookingId}` and
+  `POST /v1/bookings/{bookingId}/cancellation`.** Session 4 requires an
+  object-level access check in every handler that names an object, and
+  `POST /v1/bookings` was the only booking operation — there was no
+  operation naming a booking for that check to guard. The three added
+  operations give the `bookings:read`, `bookings:write` and
+  `bookings:fulfil` scopes something to govern.
+- **`GET /v1/health` documented with `security: []`.** It was always
+  served and never written down. It is the one operation deliberately
+  callable without a token, and saying so on the contract is what makes
+  that deliberate rather than an oversight.
+- `components.parameters.BookingId` and `components.schemas.Cancellation`.
+- `404` on every operation that names a single booking. Its description
+  covers two conditions at once — absent, and present but not the
+  caller's — because both are answered identically.
+
+### Changed
+
+- `GET /v1/bookings` takes no owner filter. Who the caller is comes from
+  the token, so a client cannot ask for another caller's page.
+- `security-defined` is back on in `spec/redocly.yaml`. It was switched
+  off for Meeting 2 with a note to remove it at Meeting 4. An operation
+  added without a security entry is now a lint failure.
+
 ## [1.1.0] - 2026-09-15
 ### Changed - BREAKING
 All `/v1/**` operations now require an access token carrying the scope stated on that operation. Requests without a token are answered 401.
 Reason: Session 3 deliberately had no authentication; user data must not be served without checking the caller.
 
 ### Added
-- `components.securitySchemes.oauth2` with six scopes.
+- `components.securitySchemes.oauth2` with five scopes.
 - `401` and `403` responses on every protected operation.
 
 Every deliberate change to `openapi.yaml` is recorded here with the reason for

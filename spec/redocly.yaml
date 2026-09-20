@@ -10,11 +10,11 @@ extends:
   - recommended
 
 rules:
-  # Authentication is Chapter 4. There is nothing to declare yet.
-  # >>> DELETE THIS LINE IN MEETING 4. If your spec still has it at
-  # >>> Meeting 7, the partner team's client will not know how to
-  # >>> authenticate and that is a D2 defect against you.
-  security-defined: off
+  # security-defined was off until Meeting 4, when there was nothing to
+  # declare. Session 4 declared it: every operation now names a scope, or
+  # opts out explicitly with `security: []` as /health does. The rule is
+  # back on, so an operation added without a security entry is a lint
+  # failure rather than a silently unprotected route.
 
   # Your service is not deployed until Meeting 3, so the only honest
   # server URLs today are a placeholder and localhost.

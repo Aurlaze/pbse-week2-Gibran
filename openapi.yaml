@@ -17,7 +17,7 @@ info:
   # TODO: your domain.
   title: Badminton Court Booking API
   # The version of this DOCUMENT. Not the same as the v1 in the URL.
-  version: 1.1.0
+  version: 1.2.0
   description: |
     This server allows students and other users to view and book badminton courts.
     All money amounts are whole numbers in the smallest unit of the currency.
@@ -66,6 +66,41 @@ security:
   - oauth2: [courts:read]
 
 paths:
+
+  # -------------------------------------------------------------------
+  # Deliberately public. The hosting platform calls this without a token,
+  # so it is the one operation that opts out of the document-level
+  # default with an empty security entry.
+  # -------------------------------------------------------------------
+  /health:
+    get:
+      operationId: health
+      summary: Liveness check
+      tags: [Courts]
+      description: |
+        Answers without touching the database, on purpose. A check that
+        queried Postgres would make one brief outage look like a total
+        failure on every instance at once.
+      security: []
+      # This operation trips operation-4xx-response, and the warning is
+      # accepted rather than silenced. The rule exists to catch
+      # happy-paths-only documents, but a liveness check genuinely has no
+      # failure a client can act on: it answers 200, or the request does
+      # not arrive at all. Inventing a 4xx here to satisfy a linter would
+      # document a response the service never produces, which is the
+      # defect the rule is trying to prevent.
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
 
   # -------------------------------------------------------------------
   # A collection GET with a filter parameter. Required for L2.
@@ -125,6 +160,68 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         
   /bookings:
+    # -----------------------------------------------------------------
+    # A collection constrained by the caller, not by a query parameter.
+    # There is no ownerId filter here on purpose: who the caller is comes
+    # from the token, so a client cannot ask for somebody else's page.
+    # -----------------------------------------------------------------
+    get:
+      operationId: listBookings
+      summary: List the bookings visible to the caller
+      tags: [Bookings]
+      security:
+        - oauth2: [bookings:read]
+      description: |
+        Returns the bookings this caller may see, and nothing else. A
+        caller holding `bookings:read` alone sees the bookings they
+        created. A caller also holding `bookings:fulfil` sees every
+        booking, because that scope is granted only to administrators
+        and the scheduled job.
+
+        The constraint is applied inside the query, so a page of `limit`
+        items is a page of items the caller can actually see.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter to bookings in one status.
+          schema:
+            type: string
+            enum: [confirmed, cancelled]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque cursor from a previous page's nextCursor.
+          schema: { type: string }
+      responses:
+        '200':
+          description: A page of bookings visible to the caller.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Booking' }
+                  nextCursor:
+                    type: string
+                    description: Absent on the last page.
+                    example: YmtnXzUxRmE5M2NE
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
     # -----------------------------------------------------------------
     # The unsafe, consequential operation. Required for L2.
     # The idempotency key is declared REQUIRED, so it is impossible to
@@ -186,6 +283,90 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  # -------------------------------------------------------------------
+  # The operations that name a single booking. A valid token carrying
+  # bookings:read is not enough to read any of them: the handler also
+  # checks the relationship between the caller and the booking, and
+  # answers 404 when there is none.
+  # -------------------------------------------------------------------
+  /bookings/{bookingId}:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+    get:
+      operationId: getBooking
+      summary: Fetch one booking
+      tags: [Bookings]
+      security:
+        - oauth2: [bookings:read]
+      description: |
+        Returns the booking only when the caller created it, or holds
+        `bookings:fulfil`. A booking that exists but belongs to another
+        caller is answered exactly as a booking that does not exist:
+        same status, same `type`, same body. The two cases are
+        deliberately indistinguishable so booking identifiers cannot be
+        enumerated.
+      responses:
+        '200':
+          description: The booking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------------
+  # Rule 5 again — the cancellation is a noun sub-resource, so it can
+  # carry a reason, return who and when, and be read back later.
+  # -------------------------------------------------------------------
+  /bookings/{bookingId}/cancellation:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+    post:
+      operationId: cancelBooking
+      summary: Cancel a booking
+      tags: [Bookings]
+      security:
+        - oauth2: [bookings:write]
+      description: |
+        Cancels a booking the caller created. The ownership check runs
+        before anything is written, so a refused request leaves the
+        booking exactly as it was.
+
+        Re-sending this when the booking is ALREADY cancelled returns
+        200 with the existing record, not 409. The requested end state
+        already holds and the caller's intent has been satisfied.
+
+        A booking belonging to another caller is answered 404, the same
+        as one that does not exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  example: Cannot make the booked slot
+      responses:
+        '200':
+          description: Already cancelled. The existing record is returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cancellation' }
+        '201':
+          description: Cancelled.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cancellation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /courts/{courtId}:
     parameters:
@@ -287,11 +468,20 @@ components:
   # Security Schemes for Authentication & Authorization
   # ---------------------------------------------------------------
   securitySchemes:
+    # One scheme carrying both flows, rather than two schemes. The
+    # scheduled job and the two web clients present the same kind of token
+    # to the same API; what differs is only how each one obtained it. Split
+    # across two schemes, the client-credentials half was referenced by no
+    # operation, which the linter reported as an unused component — an
+    # accurate description of a flow nothing could actually use.
     oauth2:
       type: oauth2
       description: |
         Access tokens are issued by the Authorisation Server. Public
-        clients use Authorization Code + PKCE with no client secret.
+        clients use Authorization Code + PKCE with no client secret. The
+        scheduled cleanup job has no user present, so it authenticates
+        itself with Client Credentials and a secret held in a secret
+        manager — never in this repository.
       flows:
         authorizationCode:
           authorizationUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/auth
@@ -303,13 +493,23 @@ components:
             bookings:read: Read bookings visible to the principal
             bookings:write: Create and cancel own bookings
             bookings:fulfil: Confirm, reject, or manage all bookings
-    clientCredentials:
-      type: oauth2
-      flows:
         clientCredentials:
           tokenUrl: https://auth.example.com/realms/badminton/protocol/openid-connect/token
           scopes:
+            bookings:read: Read bookings for the scheduled cleanup job
             bookings:fulfil: Manage all bookings for the scheduled cleanup job
+
+  parameters:
+
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      description: Opaque, server-generated. Never a database integer.
+      schema:
+        type: string
+        pattern: '^bkg_[A-Za-z0-9]{3,}$'
+      example: bkg_51Fa93cD
 
   schemas:
 
@@ -394,6 +594,22 @@ components:
           type: string
           enum: [confirmed, cancelled]
           example: confirmed
+
+    Cancellation:
+      type: object
+      required: [bookingId, reason, cancelledAt]
+      properties:
+        bookingId:
+          type: string
+          pattern: '^bkg_[A-Za-z0-9]{3,}$'
+          example: bkg_51Fa93cD
+        reason:
+          type: string
+          example: Cannot make the booked slot
+        cancelledAt:
+          type: string
+          format: date-time
+          example: '2026-08-28T09:14:00+07:00'
 
     Retirement:
       type: object

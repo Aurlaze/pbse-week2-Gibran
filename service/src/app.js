@@ -40,7 +40,17 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Checks no dependency, so a database outage cannot restart every instance.
-app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+//
+// Served at both paths on purpose. The hosting platform is configured to call
+// /health at the root, while openapi.yaml's servers already carry /v1, so the
+// operation the contract documents is /v1/health. Registering both keeps the
+// platform working and the document honest.
+//
+// Both sit above app.use(authenticate), so neither ever sees a token. This is
+// the one operation with `security: []` on the contract.
+app.get(["/health", "/v1/health"], (req, res) =>
+  res.status(200).json({ status: "ok" })
+);
 
 // Authentication for protected API routes.
 app.use(authenticate);

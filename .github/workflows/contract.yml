@@ -31,6 +31,18 @@ jobs:
       DB_NAME: badminton_booking
       PORT: 3000
 
+      # src/config.js refuses to start without all four of these. They were
+      # missing, so the service exited before the readiness check could ever
+      # reach /health and every run of this job failed on a timeout.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
+
+      # Test-only values. No real authorisation server is reachable from CI,
+      # and a token minted against this issuer is refused by any deployed
+      # service, which is the point of Step 11a's local-key strategy.
+      OIDC_ISSUER: https://test.local/
+      OIDC_AUDIENCE: badminton-api
+      OIDC_JWKS_URI: http://127.0.0.1:9999/jwks.json
+
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +73,16 @@ jobs:
       - name: Install schemathesis
         run: pip install schemathesis
 
+      # Must come up before the service, which fetches this JWKS the first
+      # time it has a token to verify. Also writes the token the curl steps
+      # and the contract suite send, now that /v1 refuses anonymous requests.
+      - name: Start the test JWKS server
+        run: node tests/helpers/serve-jwks.js --port 9999 --token-out /tmp/contract-token.txt > /tmp/jwks.log 2>&1 &
+        working-directory: service
+
+      - name: Wait for the test JWKS server
+        run: npx --yes wait-on http://127.0.0.1:9999/jwks.json --timeout 30000
+
       - name: Start the service
         run: npm start > /tmp/service.log 2>&1 &
         working-directory: service
@@ -73,11 +95,13 @@ jobs:
       # and would otherwise hold this slot.
       - name: Idempotency replay
         run: |
+          TOKEN=$(cat /tmp/contract-token.txt)
           KEY=$(uuidgen)
           BODY='{"courtId":"crt_51Fa93cD","startTime":"2026-08-29T19:00:00+07:00","endTime":"2026-08-29T20:00:00+07:00"}'
           for i in 1 2; do
             code=$(curl -s -o "/tmp/r$i.json" -w '%{http_code}' \
               -X POST http://localhost:3000/v1/bookings \
+              -H "Authorization: Bearer $TOKEN" \
               -H "Idempotency-Key: $KEY" \
               -H 'Content-Type: application/json' \
               -d "$BODY")
@@ -92,8 +116,12 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/badminton_booking
 
+      # The contract did not change to accommodate authentication; the
+      # runner did. Session 4 step 12b: operations that passed at Session 3
+      # must still pass, they just have to present a token now.
       - name: Contract conformance
-        run: bash ./tests/contract/run.sh
+        run: |
+          TOKEN=$(cat /tmp/contract-token.txt) bash ./tests/contract/run.sh
         env:
           BASE: http://localhost:3000/v1
 
@@ -102,3 +130,5 @@ jobs:
         run: |
           echo "=== service stdout/stderr ==="
           cat /tmp/service.log || echo "(no log captured)"
+          echo "=== test JWKS server ==="
+          cat /tmp/jwks.log || echo "(no log captured)"
