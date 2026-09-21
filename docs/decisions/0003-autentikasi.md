@@ -146,16 +146,60 @@ ones worth stealing.
 
 #### Evidence
 
-> **To be filled in.** Run `docs/checkpoints.sh` against a running Keycloak
-> and paste the output of section 10b here, together with the name of the
-> setting enabled. Until this block contains real output, Step 10 is not
-> demonstrated.
+Captured by `docs/checkpoints.sh` against the realm running from
+`infra/docker-compose.auth.yml`. Full output in
+[`docs/checkpoint-output.txt`](../checkpoint-output.txt).
 
 ```
-$ # 1. exchange RT1 -> RT2, RT1 becomes used
-$ # 2. reuse RT1   -> must be refused
-$ # 3. present RT2 -> must ALSO be refused, because the family is revoked
+10b . Refresh rotation and reuse detection
+
+  PASS   RT1 obtained
+  PASS   1. rotation is working - RT2 differs from RT1
+  PASS   2. reusing the spent RT1 is refused -> invalid_grant
+  PASS   3. RT2 is ALSO refused -> invalid_grant   (the whole family was revoked)
+
+  Setting enabled on the realm:
+    revokeRefreshToken = true, refreshTokenMaxReuse = 0
 ```
+
+The third line is the one that distinguishes rotation from reuse *detection*.
+Rotation alone would have invalidated `RT1` and left `RT2` working — which is
+exactly the state an attacker who stole `RT1` wants, because the theft would
+go unnoticed. Refusing `RT2` as well means the server, on seeing a spent
+token, stops trusting the entire family and forces a fresh login. It does not
+need to work out which of the two holders was legitimate.
+
+#### One real token, decoded
+
+From section 3h of the same run. Decoded locally — a live access token is a
+live credential, and pasting one into an online decoder is the same as
+sharing a password.
+
+```json
+{
+  "iss": "http://localhost:8080/realms/badminton-booking",
+  "aud": ["badminton-api", "account"],
+  "exp": 1789916848,
+  "sub": "bcf05c9c-2927-45a5-8636-bf94156356d1",
+  "scope": "openid profile email courts:read",
+  "azp": "test-cli",
+  "preferred_username": "student-a"
+}
+```
+
+Three things this confirms:
+
+- `aud` contains `badminton-api`, so the audience check in `verify.js` accepts
+  it. A token minted for another API in this realm would not carry that value
+  and would be refused. Note `aud` is an **array** here — Keycloak adds
+  `account` of its own accord — which the verification handles.
+- `sub` is a UUID, not the username. That is the value `booked_by` stores, and
+  what every ownership check compares against.
+- The token carries **no `client_id` claim**, and `preferred_username` does
+  not begin `service-account-`, so `principal.kind` correctly reports `user`.
+  A client-credentials token has still not been inspected, so the `service`
+  branch of that function remains unconfirmed — see *What is deliberately
+  still open*.
 
 ### 7. Tokens never reach the logs
 
