@@ -33,6 +33,21 @@ function Navigation() {
   );
 }
 
+function Callback() {
+  const { authenticated, returnToKey } = useAuth();
+
+  if (!authenticated) {
+    return <main>Signing you in...</main>;
+  }
+
+  const returnTo =
+    sessionStorage.getItem(returnToKey) || "/courts";
+
+  sessionStorage.removeItem(returnToKey);
+
+  return <Navigate to={returnTo} replace />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -42,17 +57,38 @@ function App() {
         <Routes>
           <Route
             path="/callback"
-            element={<Navigate to="/courts" replace />}
+            element={<Callback />}
           />
 
-          <Route path="/courts" element={<Courts />} />
-          <Route path="/courts/:courtId" element={<CourtDetail />} />
+          <Route
+            path="/courts"
+            element={<Courts />}
+          />
 
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/bookings/new" element={<BookingForm />} />
-          <Route path="/bookings/:bookingId" element={<BookingDetail />} />
+          <Route
+            path="/courts/:courtId"
+            element={<CourtDetail />}
+          />
 
-          <Route path="/admin/courts" element={<AdminCourts />} />
+          <Route
+            path="/bookings"
+            element={<Bookings />}
+          />
+
+          <Route
+            path="/bookings/new"
+            element={<BookingForm />}
+          />
+
+          <Route
+            path="/bookings/:bookingId"
+            element={<BookingDetail />}
+          />
+
+          <Route
+            path="/admin/courts"
+            element={<AdminCourts />}
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

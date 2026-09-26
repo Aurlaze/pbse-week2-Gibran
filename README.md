@@ -56,3 +56,19 @@ pbse-week2-Gibran/
 | Manage courts | Court management list | Administrator | GET /v1/courts | 1 |
 | Manage courts | Court management detail | Administrator | GET /v1/courts/{courtId} | 1 |
 | Manage courts | Retirement form | Administrator | POST /v1/courts/{courtId}/retirement | 1 |
+
+## A.3 Session Storage and Security
+
+The browser client uses the Keycloak JavaScript adapter for authentication. Access and refresh tokens are kept in memory by the Keycloak adapter and are not stored in `localStorage` or `sessionStorage`.
+
+The browser only uses `sessionStorage` for the temporary `a3-return-to` value. This value stores the application path that the user was viewing before authentication was required, so the application can return the user to the same screen after signing in. It is not an authentication credential.
+
+Keeping authentication tokens in memory reduces the risk of exposing reusable tokens through persistent browser storage. The consequence is that the tokens are lost when the page is fully reloaded. The application can then use the Keycloak SSO session to check whether the user is still authenticated and obtain a new session if possible.
+
+When the API returns `401 Unauthorized`, the browser clears the local authentication state, remembers the current location, and offers the user a sign-in action.
+
+When the API returns `403 Forbidden`, the browser explains that the authenticated user does not have the required permission and does not send the user through the sign-in flow again.
+
+When the API returns `404 Not Found` for a specific resource, the browser shows a generic not-found message without revealing whether the resource exists for another user.
+
+Signing out clears the local authentication state and calls the Keycloak logout endpoint.

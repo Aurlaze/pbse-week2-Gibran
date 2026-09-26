@@ -11,6 +11,11 @@ import keycloak from "./keycloak";
 const AuthContext = createContext(null);
 
 const CALLBACK_URL = `${window.location.origin}/callback`;
+const RETURN_TO_KEY = "a3-return-to";
+
+function getCurrentLocation() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
 
 export function AuthProvider({ children }) {
   const [authenticated, setAuthenticated] = useState(false);
@@ -46,13 +51,46 @@ export function AuthProvider({ children }) {
     initialize();
   }, []);
 
+  useEffect(() => {
+    function handleSessionExpired() {
+      sessionStorage.setItem(
+        RETURN_TO_KEY,
+        getCurrentLocation()
+      );
+
+      keycloak.clearToken();
+      setAuthenticated(false);
+    }
+
+    window.addEventListener(
+      "auth:session-expired",
+      handleSessionExpired
+    );
+
+    return () => {
+      window.removeEventListener(
+        "auth:session-expired",
+        handleSessionExpired
+      );
+    };
+  }, []);
+
   async function login() {
+    sessionStorage.setItem(
+      RETURN_TO_KEY,
+      getCurrentLocation()
+    );
+
     await keycloak.login({
       redirectUri: CALLBACK_URL,
     });
   }
 
   async function logout() {
+    sessionStorage.removeItem(RETURN_TO_KEY);
+    keycloak.clearToken();
+    setAuthenticated(false);
+
     await keycloak.logout({
       redirectUri: `${window.location.origin}/courts`,
     });
@@ -64,6 +102,7 @@ export function AuthProvider({ children }) {
     initializing,
     login,
     logout,
+    returnToKey: RETURN_TO_KEY,
   };
 
   if (initializing) {

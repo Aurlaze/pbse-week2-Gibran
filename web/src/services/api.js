@@ -2,6 +2,19 @@ import keycloak from "../auth/keycloak";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+export class ApiError extends Error {
+  constructor(message, status, data = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+function notifySessionExpired() {
+  window.dispatchEvent(new CustomEvent("auth:session-expired"));
+}
+
 async function request(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -19,10 +32,12 @@ async function request(path, options = {}) {
       console.error("Failed to refresh access token:", error);
 
       keycloak.clearToken();
+      notifySessionExpired();
 
-      const authError = new Error("Your session has expired.");
-      authError.status = 401;
-      throw authError;
+      throw new ApiError(
+        "Your session has expired.",
+        401
+      );
     }
   }
 
@@ -34,9 +49,17 @@ async function request(path, options = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new Error(data?.title || "Request failed");
-    error.status = response.status;
-    error.data = data;
+    const error = new ApiError(
+      data?.title || "Request failed",
+      response.status,
+      data
+    );
+
+    if (response.status === 401) {
+      keycloak.clearToken();
+      notifySessionExpired();
+    }
+
     throw error;
   }
 
