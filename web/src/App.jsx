@@ -13,6 +13,7 @@ import CourtDetail from "./views/CourtDetail";
 import Bookings from "./views/Bookings";
 import BookingForm from "./views/BookingForm";
 import BookingDetail from "./views/BookingDetail";
+import CancelBooking from "./views/CancelBooking";
 import AdminCourts from "./views/AdminCourts";
 
 // A.2 item 2 — the menu differs by role. This is user experience only: it
@@ -127,6 +128,11 @@ function App() {
           <Route
             path="/bookings/:bookingId"
             element={<BookingDetail />}
+          />
+
+          <Route
+            path="/bookings/:bookingId/cancel"
+            element={<CancelBooking />}
           />
 
           <Route

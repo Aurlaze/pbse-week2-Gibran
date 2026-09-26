@@ -95,6 +95,12 @@ export default function BookingDetail() {
       {booking.endTime && <p>End: {booking.endTime}</p>}
       {booking.status && <p>Status: {booking.status}</p>}
 
+      {booking.status === "confirmed" && (
+        <p>
+          <Link to={`/bookings/${booking.id}/cancel`}>Cancel this booking</Link>
+        </p>
+      )}
+
       <p>
         <Link to="/bookings">Back to bookings</Link>
       </p>

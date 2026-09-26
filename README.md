@@ -48,11 +48,11 @@ pbse-week2-Gibran/
 |---|---|---|---|---:|
 | Browse courts | Court list | Student | GET /v1/courts | 1 |
 | Browse courts | Court detail | Student | GET /v1/courts/{courtId} | 1 |
-| Create booking | Booking form | Student | POST /v1/bookings | 1 |
+| Create booking | Booking form | Student | GET /v1/courts, POST /v1/bookings | 2 |
 | Create booking | Booking confirmation | Student | GET /v1/bookings/{bookingId} | 1 |
 | View and cancel booking | Booking list | Student | GET /v1/bookings | 1 |
 | View and cancel booking | Booking detail | Student | GET /v1/bookings/{bookingId} | 1 |
-| View and cancel booking | Cancellation form | Student | POST /v1/bookings/{bookingId}/cancellation | 1 |
+| View and cancel booking | Cancellation form | Student | GET /v1/bookings/{bookingId}, POST /v1/bookings/{bookingId}/cancellation | 2 |
 | Manage courts | Court management list | Administrator | GET /v1/courts | 1 |
 | Manage courts | Court management detail | Administrator | GET /v1/courts/{courtId} | 1 |
 | Manage courts | Retirement form | Administrator | POST /v1/courts/{courtId}/retirement | 1 |
@@ -203,4 +203,65 @@ somebody else, which is both wrong and a small leak.
 
 The model's logic is covered by `web/src/lib/view-state.test.js`
 (`cd web && npm test`).
+
+## A.6 Forms and the Presentation of Failure
+
+**The service names the field and says why.** A 400 or 422 carries an
+`invalid-params` list — the extension member RFC 9457 uses in its own
+example — where each entry is `{ name, reason }`:
+
+```json
+{
+  "type": "https://api.example.com/problems/validation-failed",
+  "title": "One or more fields are invalid",
+  "status": 422,
+  "detail": "endTime must be after startTime",
+  "invalid-params": [
+    { "name": "endTime", "reason": "The end time must be after the start time" }
+  ]
+}
+```
+
+This replaced an earlier `invalidFields: ["endTime"]`. A bare list of names
+tells a client which box to mark red but not what to write beside it, and a
+client that invents the wording is guessing at a rule only the service
+knows. The reason now travels with the name. The member is documented on
+the `Problem` schema in `openapi.yaml`, where it previously was not.
+
+**The client reads the document, not the text.** `web/src/lib/problem.js`
+turns a refusal into a `Problem` carrying `type`, `title`, `detail` and the
+invalid parameters indexed by field name. Forms ask it `fieldReason('endTime')`
+and put the answer under that input (`components/Field.jsx`), with
+`aria-invalid` and `aria-describedby` so the message reaches a screen reader
+too.
+
+**Field, form, and session failures are three different places.** A refusal
+naming fields lands on those fields. A refusal naming none — an overlapping
+slot, a retired court — is about the request as a whole and is shown at the
+level of the form. A 401 or 403 is neither, and is handled as A.3 describes.
+
+**Client validation is user experience and guarantees nothing.** Every rule
+in `checkLocally` exists again in `service/src/schemas/bookings.js`, which
+is the only place a rule actually holds. A.9 is what demonstrates this.
+
+**The idempotency key identifies the attempt, not the click.** It is
+generated once for a set of form values and kept in a ref: pressing submit
+again after a failure is the same intent and must not create a second
+booking. Editing any field makes it a different request, so the key is
+renewed — the service answers a reused key carrying a different body with
+409. Disabling the submit button while the request is in flight is
+prevention; the key is the guarantee.
+
+The cancellation operation carries no idempotency key, deliberately: the
+contract makes it naturally idempotent, answering 200 with the existing
+cancellation when a booking is already cancelled, because the end state the
+caller asked for already holds.
+
+**Times are converted before they are sent.** A `datetime-local` input
+produces `2026-09-27T14:30` — no seconds, no offset — which the contract's
+RFC 3339 rule refuses. The browser's own zone is applied in the form, so the
+user is not shown a refusal they did not cause.
+
+Covered by `web/src/lib/problem.test.js` and, on the service side, by the
+cancellation-reason case in `service/tests/authz/layer2-scope.test.js`.
 

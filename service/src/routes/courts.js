@@ -1,7 +1,7 @@
 const express = require("express");
 const { findCourtById, findAllCourts } = require("../store/courts");
 const { toCourtRepresentation } = require("../representations/courts");
-const { problem } = require("../problem");
+const { problem, invalidParam } = require("../problem");
 const requireScope = require("../auth/require-scope");
 
 const router = express.Router();
@@ -20,7 +20,9 @@ router.get("/courts", requireScope("courts:read"), async (req, res) => {
   if (unknown.length > 0) {
     return problem(res, 400, "malformed-request", {
       detail: `Unknown query parameter: ${unknown.join(", ")}`,
-      invalidFields: unknown
+      "invalid-params": unknown.map((name) =>
+        invalidParam(name, "This query parameter is not part of the operation")
+      )
     });
   }
 
@@ -103,7 +105,9 @@ router.get(
     if (unknownQuery.length > 0) {
       return problem(res, 400, "malformed-request", {
         detail: `Unknown query parameter: ${unknownQuery.join(", ")}`,
-        invalidFields: unknownQuery
+        "invalid-params": unknownQuery.map((name) =>
+          invalidParam(name, "This query parameter is not part of the operation")
+        )
       });
     }
 

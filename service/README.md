@@ -58,17 +58,17 @@ produce it.
 
 | Cause in the handler | Status | `type` URI | Extension members |
 |---|---:|---|---|
-| Unknown query parameter | 400 | `…/problems/malformed-request` | `invalidFields` |
+| Unknown query parameter | 400 | `…/problems/malformed-request` | `invalid-params` |
 | Invalid `limit` value | 400 | `…/problems/malformed-request` | — |
 | Invalid `status` filter value | 400 | `…/problems/malformed-request` | — |
 | `courtId` fails its documented pattern | 400 | `…/problems/malformed-request` | — |
 | `Idempotency-Key` missing or not a v4 UUID | 400 | `…/problems/malformed-request` | — |
 | Request body is not valid JSON | 400 | `…/problems/malformed-request` | — |
-| Body fails the `NewBooking` schema | 400 | `…/problems/malformed-request` | `invalidFields` |
+| Body fails the `NewBooking` schema | 400 | `…/problems/malformed-request` | `invalid-params` |
 | No route matches the request | 404 | `…/problems/not-found` | — |
 | Court named by the URL does not exist | 404 | `…/problems/not-found` | — |
-| `endTime` is not after `startTime` | 422 | `…/problems/validation-failed` | `invalidFields` |
-| `courtId` in the body references no court | 422 | `…/problems/validation-failed` | `invalidFields` |
+| `endTime` is not after `startTime` | 422 | `…/problems/validation-failed` | `invalid-params` |
+| `courtId` in the body references no court | 422 | `…/problems/validation-failed` | `invalid-params` |
 | Court is retired or unavailable | 409 | `…/problems/court-slot-unavailable` | `courtId`, `status` |
 | Court already booked for an overlapping slot | 409 | `…/problems/court-slot-unavailable` | `courtId`, `conflictingBookingId` |
 | Same idempotency key, different body | 409 | `…/problems/idempotency-key-reuse` | — |

@@ -1,4 +1,5 @@
 import keycloak from "../auth/keycloak";
+import { Problem } from "../lib/problem";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -8,15 +9,6 @@ if (!API_BASE_URL) {
   throw new Error(
     "VITE_API_BASE_URL is not set. Copy web/.env.example to web/.env.local."
   );
-}
-
-export class ApiError extends Error {
-  constructor(message, status, data = null) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.data = data;
-  }
 }
 
 function notifySessionExpired() {
@@ -42,10 +34,7 @@ async function request(path, options = {}) {
       keycloak.clearToken();
       notifySessionExpired();
 
-      throw new ApiError(
-        "Your session has expired.",
-        401
-      );
+      throw new Problem("Your session has expired.", 401);
     }
   }
 
@@ -57,7 +46,7 @@ async function request(path, options = {}) {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const error = new ApiError(
+    const problem = new Problem(
       data?.title || "Request failed",
       response.status,
       data
@@ -68,11 +57,13 @@ async function request(path, options = {}) {
       notifySessionExpired();
     }
 
-    throw error;
+    throw problem;
   }
 
   return data;
 }
+
+export { Problem };
 
 export function getCourts(params = "") {
   return request(`/courts${params}`);

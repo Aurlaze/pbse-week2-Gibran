@@ -158,3 +158,43 @@ code {
   opacity: 1;
   font-weight: 600;
 }
+
+/* A.6 — a refusal shown on the field it is about. */
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.field-hint {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin: 0.25rem 0 0;
+}
+
+.field-error {
+  font-size: 0.9rem;
+  color: #b3261e;
+  margin: 0.25rem 0 0;
+}
+
+[aria-invalid="true"] {
+  outline: 2px solid #b3261e;
+}
+
+/* A problem about the request as a whole rather than any one field. */
+.form-problem {
+  border: 1px solid #b3261e;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .field-error { color: #f2b8b5; }
+  .form-problem { border-color: #f2b8b5; }
+}

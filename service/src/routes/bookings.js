@@ -20,7 +20,7 @@ const {
   parseCancellation,
   isValidIdempotencyKey
 } = require("../schemas/bookings");
-const { problem } = require("../problem");
+const { problem, invalidParam } = require("../problem");
 const requireScope = require("../auth/require-scope");
 const { mayReadBooking, mayCancelBooking } = require("../auth/ownership");
 
@@ -70,7 +70,7 @@ router.post(
   if (!parsed.ok) {
     return problem(res, 400, "malformed-request", {
       detail: "One or more fields do not match the documented schema",
-      invalidFields: parsed.invalidFields
+      "invalid-params": parsed.invalidParams
     });
   }
 
@@ -80,7 +80,9 @@ router.post(
   if (Date.parse(endTime) <= Date.parse(startTime)) {
     return problem(res, 422, "validation-failed", {
       detail: "endTime must be after startTime",
-      invalidFields: ["endTime"]
+      "invalid-params": [
+        invalidParam("endTime", "The end time must be after the start time")
+      ]
     });
   }
 
@@ -109,7 +111,9 @@ router.post(
   if (!court) {
     return problem(res, 422, "validation-failed", {
       detail: `Court ${courtId} does not exist`,
-      invalidFields: ["courtId"]
+      "invalid-params": [
+        invalidParam("courtId", "That court does not exist. Choose one from the court list")
+      ]
     });
   }
 
@@ -179,7 +183,9 @@ router.get("/bookings", requireScope("bookings:read"), async (req, res) => {
   if (unknown.length > 0) {
     return problem(res, 400, "malformed-request", {
       detail: `Unknown query parameter: ${unknown.join(", ")}`,
-      invalidFields: unknown
+      "invalid-params": unknown.map((name) =>
+        invalidParam(name, "This field is not part of the request")
+      )
     });
   }
 
@@ -300,7 +306,7 @@ router.post(
       return problem(res, 400, "malformed-request", {
         detail:
           "reason is required: 1 to 500 characters, with no control characters",
-        invalidFields: parsed.invalidFields
+        "invalid-params": parsed.invalidParams
       });
     }
 

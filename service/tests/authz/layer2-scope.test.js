@@ -99,7 +99,16 @@ test("a cancellation reason carrying control characters is a 400", async () => {
       400,
       `expected 400 for ${JSON.stringify(reason.slice(0, 24))}, got ${response.status}`
     );
-    assert.deepEqual(response.body.invalidFields, ["reason"]);
+    // RFC 9457 invalid-params: the field is named AND given a reason, so a
+    // client can put the message on that field without inventing wording.
+    assert.deepEqual(
+      response.body["invalid-params"].map((param) => param.name),
+      ["reason"]
+    );
+    assert.ok(
+      response.body["invalid-params"].every((param) => param.reason?.length > 0),
+      "every invalid-params entry must carry a reason"
+    );
   }
 
   // The booking is untouched by any of them.

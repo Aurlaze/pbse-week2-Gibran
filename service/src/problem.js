@@ -67,9 +67,19 @@ function forbidden(res, needed) {
   });
 }
 
+// One entry in the `invalid-params` extension member — the shape RFC 9457
+// uses in its own example. A bare list of field names tells a client which
+// box to mark red but not what to write beside it, and a client that
+// invents the wording is guessing at rules only this service knows. The
+// reason travels with the name, in language a person can act on.
+function invalidParam(name, reason) {
+  return { name, reason };
+}
+
 module.exports = {
   problem,
   unauthorized,
   forbidden,
+  invalidParam,
   TITLES
 };

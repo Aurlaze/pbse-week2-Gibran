@@ -772,6 +772,33 @@ components:
             The URI of this specific occurrence. In Chapter 9 the
             correlation identifier goes here.
           example: /v1/things/thg_51Fa93cD/retirement
+        invalid-params:
+          type: array
+          description: |
+            Which fields were refused and why — the extension member
+            RFC 9457 uses in its own example. Present on schema
+            failures (400) and on cross-field rules (422).
+
+            Each entry names one field and carries a reason written for
+            the person filling the form in, so a client can place the
+            message on that field rather than inventing wording for a
+            rule only this service knows. A client that receives this
+            member MUST NOT assume the list is exhaustive: fields are
+            reported as they are checked.
+          items:
+            type: object
+            required: [name, reason]
+            properties:
+              name:
+                type: string
+                description: |
+                  The field the problem is about, as named in the
+                  request body or query string.
+                example: endTime
+              reason:
+                type: string
+                description: Why it was refused, in domain terms.
+                example: The end time must be after the start time
 
   responses:
 
@@ -784,6 +811,10 @@ components:
             type: https://api.example.com/problems/malformed-request
             title: The request could not be parsed
             status: 400
+            detail: One or more fields do not match the documented schema
+            invalid-params:
+              - name: startTime
+                reason: Give a start date and time
 
     Unauthorized:
       description: The token is absent, unverifiable, or expired.

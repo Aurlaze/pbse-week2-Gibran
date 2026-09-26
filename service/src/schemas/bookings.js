@@ -24,29 +24,40 @@ function isValidDateTime(value) {
   );
 }
 
+// Invalid fields are reported as RFC 9457 `invalid-params` entries; the
+// helper lives with the rest of the problem document's shape.
+const { invalidParam } = require("../problem");
+
 // Per-field shape only. Cross-field rules are 422s and belong in the handler.
 
 function parseNewBooking(body) {
-  const invalidFields = [];
+  const invalidParams = [];
 
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return { ok: false, invalidFields: ["body"] };
+    return {
+      ok: false,
+      invalidParams: [invalidParam("body", "A JSON object is required")]
+    };
   }
 
   if (!COURT_ID_PATTERN.test(body.courtId ?? "")) {
-    invalidFields.push("courtId");
+    invalidParams.push(
+      invalidParam("courtId", "Choose a court. Court identifiers look like crt_a1b2c3")
+    );
   }
 
   if (!isValidDateTime(body.startTime)) {
-    invalidFields.push("startTime");
+    invalidParams.push(
+      invalidParam("startTime", "Give a start date and time")
+    );
   }
 
   if (!isValidDateTime(body.endTime)) {
-    invalidFields.push("endTime");
+    invalidParams.push(invalidParam("endTime", "Give an end date and time"));
   }
 
-  if (invalidFields.length > 0) {
-    return { ok: false, invalidFields };
+  if (invalidParams.length > 0) {
+    return { ok: false, invalidParams };
   }
 
   // Normalised to UTC. RFC 3339 allows offsets up to +/-23:59, but Postgres
@@ -76,26 +87,45 @@ const REASON_MAX_LENGTH = 500;
 
 function parseCancellation(body) {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return { ok: false, invalidFields: ["body"] };
+    return {
+      ok: false,
+      invalidParams: [invalidParam("body", "A JSON object is required")]
+    };
   }
 
   const { reason } = body;
 
-  if (typeof reason !== "string") {
-    return { ok: false, invalidFields: ["reason"] };
+  if (typeof reason !== "string" || reason.trim() === "") {
+    return {
+      ok: false,
+      invalidParams: [
+        invalidParam("reason", "Say why the booking is being cancelled")
+      ]
+    };
   }
 
-  const trimmed = reason.trim();
-
-  if (
-    trimmed === "" ||
-    reason.length > REASON_MAX_LENGTH ||
-    CONTROL_CHARACTERS.test(reason)
-  ) {
-    return { ok: false, invalidFields: ["reason"] };
+  if (reason.length > REASON_MAX_LENGTH) {
+    return {
+      ok: false,
+      invalidParams: [
+        invalidParam(
+          "reason",
+          `Keep the reason under ${REASON_MAX_LENGTH} characters`
+        )
+      ]
+    };
   }
 
-  return { ok: true, data: { reason: trimmed } };
+  if (CONTROL_CHARACTERS.test(reason)) {
+    return {
+      ok: false,
+      invalidParams: [
+        invalidParam("reason", "The reason contains characters that cannot be stored")
+      ]
+    };
+  }
+
+  return { ok: true, data: { reason: reason.trim() } };
 }
 
 module.exports = {
