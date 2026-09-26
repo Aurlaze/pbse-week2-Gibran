@@ -159,3 +159,48 @@ and gets a 201. "CORS blocked it, so the booking was never created" is
 false. Every rule that matters is enforced by the authorisation layers from
 Session 4, which is what A.9 verifies.
 
+## A.5 The Four States of Every View
+
+Every view that shows data from the service holds exactly one of four
+states, declared in `web/src/lib/view-state.js` and moved between by
+`web/src/lib/useResource.js`. The assignment declares this as a TypeScript
+union; this project is JavaScript, so the union is expressed as
+constructors. The property that matters is the same — the four states are
+named up front rather than discovered one at a time.
+
+```js
+{ kind: 'loading' }
+{ kind: 'empty' }
+{ kind: 'error',   problem, willRetry }
+{ kind: 'content', data, fetchedAt, stale, lastAttempt }
+```
+
+| State | What is shown |
+|---|---|
+| Loading | Skeleton rows with the layout already formed (`components/Skeleton.jsx`) — not a blank screen, which makes a user reload and start the wait again |
+| Empty | An explicit sentence, and where there is one, the next step: "You do not have any bookings yet." |
+| Error | What failed, in domain terms, plus a manual retry control. 401, 403 and 404 are answered differently, per A.3 |
+| Content | The data, above an age marker saying when it was fetched |
+
+**Loading means no data is held.** A background refresh keeps what is on
+screen. This is the distinction that stops a poll blanking the list every
+cycle, and it is why `useResource` exposes `retry()` and `refresh()`
+separately: a manual retry from the error state starts the wait over
+visibly, a refresh does not.
+
+**A failed refresh does not discard good data.** It keeps the content and
+marks it stale, and the view then says so: *"Showing courts as of 12:04.
+Reconnecting… Last attempt failed 8 seconds ago."* Stale data shown as
+though it were current is worse than an error, because an error announces
+its own condition and old data does not. The age marker is rendered
+whenever there is content, not only when a refresh has failed — the time
+the data was fetched is part of reading it honestly.
+
+**A single object has no empty state.** An absent court or booking is a 404,
+which is the error state. Only a collection can be legitimately empty.
+Conflating the two would show "no bookings" for a booking that belongs to
+somebody else, which is both wrong and a small leak.
+
+The model's logic is covered by `web/src/lib/view-state.test.js`
+(`cd web && npm test`).
+

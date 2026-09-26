@@ -1,156 +1,117 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getBookings } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
+import { useResource } from "../lib/useResource";
+import { SkeletonList } from "../components/Skeleton";
+import StaleNotice from "../components/StaleNotice";
+
+const TITLE = "My Bookings";
 
 export default function Bookings() {
   const { login } = useAuth();
 
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  async function loadBookings() {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { state, retry } = useResource(
+    async () => {
       const data = await getBookings();
-      setBookings(data.items ?? data);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
+      return data.items ?? data;
+    },
+    "",
+    { collection: true }
+  );
 
-  if (loading) {
+  if (state.kind === "loading") {
     return (
       <main>
-        <h1>My Bookings</h1>
-        <p>Loading bookings...</p>
+        <h1>{TITLE}</h1>
+        <SkeletonList rows={3} label="Loading bookings" />
       </main>
     );
   }
 
-  if (error) {
-    if (error.status === 401) {
+  if (state.kind === "error") {
+    const { status } = state.problem;
+
+    if (status === 401) {
       return (
         <main>
-          <h1>My Bookings</h1>
+          <h1>{TITLE}</h1>
 
-          <p>
-            Your session has expired. Please sign in again to
-            continue.
-          </p>
+          <p>Your session has expired. Please sign in again to continue.</p>
 
-          <button onClick={login}>
-            Sign in
-          </button>
+          <button onClick={login}>Sign in</button>
         </main>
       );
     }
 
-    if (error.status === 403) {
+    if (status === 403) {
       return (
         <main>
-          <h1>My Bookings</h1>
+          <h1>{TITLE}</h1>
 
-          <p>
-            You are signed in, but you do not have permission
-            to view your bookings.
-          </p>
+          <p>You are signed in, but you do not have permission to view bookings.</p>
         </main>
       );
     }
 
-    if (error.status === 404) {
+    if (status === 404) {
       return (
         <main>
-          <h1>My Bookings</h1>
+          <h1>{TITLE}</h1>
 
-          <p>
-            Your bookings could not be found.
-          </p>
+          <p>Your bookings could not be found.</p>
 
-          <button onClick={loadBookings}>
-            Retry
-          </button>
+          <button onClick={retry}>Retry</button>
         </main>
       );
     }
 
     return (
       <main>
-        <h1>My Bookings</h1>
+        <h1>{TITLE}</h1>
 
-        <p>
-          We could not load your bookings right now.
-        </p>
+        <p>We could not load your bookings right now. Nothing was changed.</p>
 
-        <button onClick={loadBookings}>
-          Retry
-        </button>
+        <button onClick={retry}>Retry</button>
       </main>
     );
   }
 
-  if (bookings.length === 0) {
+  // Empty is not an error and must not read like one: the court is free,
+  // the student simply has not booked it yet, and the next step is offered.
+  if (state.kind === "empty") {
     return (
       <main>
-        <h1>My Bookings</h1>
+        <h1>{TITLE}</h1>
 
         <p>You do not have any bookings yet.</p>
 
-        <Link to="/bookings/new">
-          Create a booking
-        </Link>
+        <Link to="/bookings/new">Create a booking</Link>
       </main>
     );
   }
 
   return (
     <main>
-      <h1>My Bookings</h1>
+      <h1>{TITLE}</h1>
 
-      {bookings.map((booking) => (
+      <StaleNotice state={state} noun="bookings" />
+
+      <p>
+        <Link to="/bookings/new">Create a booking</Link>
+      </p>
+
+      {state.data.map((booking) => (
         <article key={booking.id}>
-          <h2>
-            Booking {booking.id}
-          </h2>
+          <h2>Booking {booking.id}</h2>
 
-          {booking.courtId && (
-            <p>
-              Court: {booking.courtId}
-            </p>
-          )}
+          {booking.courtId && <p>Court: {booking.courtId}</p>}
+          {booking.startTime && <p>Start: {booking.startTime}</p>}
+          {booking.endTime && <p>End: {booking.endTime}</p>}
+          {booking.status && <p>Status: {booking.status}</p>}
 
-          {booking.startTime && (
-            <p>
-              Start: {booking.startTime}
-            </p>
-          )}
-
-          {booking.endTime && (
-            <p>
-              End: {booking.endTime}
-            </p>
-          )}
-
-          {booking.status && (
-            <p>
-              Status: {booking.status}
-            </p>
-          )}
-
-          <Link to={`/bookings/${booking.id}`}>
-            View booking
-          </Link>
+          <Link to={`/bookings/${booking.id}`}>View booking</Link>
         </article>
       ))}
     </main>
