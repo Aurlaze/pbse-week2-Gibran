@@ -40,6 +40,7 @@ pbse-week2-Gibran/
 ├── .gitignore            # Git ignore configuration
 ├── README.md             # Project documentation
 └── package.json / requirements.txt  # Project dependencies
+```
 
 ## A.1 Application Workflows
 
