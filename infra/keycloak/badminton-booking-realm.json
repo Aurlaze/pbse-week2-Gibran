@@ -817,10 +817,12 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "https://student.badminton.example/callback"
+        "https://student.badminton.example/callback",
+        "http://localhost:5173/callback"
       ],
       "webOrigins": [
-        "https://web.badminton.example"
+        "https://web.badminton.example",
+        "http://localhost:5173"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -847,7 +849,8 @@
         "acr.loa.map": "{}",
         "display.on.consent.screen": "false",
         "pkce.code.challenge.method": "S256",
-        "token.response.type.bearer.lower-case": "false"
+        "token.response.type.bearer.lower-case": "false",
+        "post.logout.redirect.uris": "http://localhost:5173/courts"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
