@@ -74,3 +74,59 @@ function sendRepresentation(req, res, payload) {
 }
 
 module.exports = { computeETag, matches, sendRepresentation };
+
+// ---------------------------------------------------------------------
+// A.8 — conditional writes.
+// ---------------------------------------------------------------------
+
+const { problem } = require("./problem");
+
+/**
+ * Enforces If-Match on a write against an entity that can change under the
+ * caller's feet.
+ *
+ * Returns true when the caller may proceed. Otherwise it has already
+ * answered, and the handler must return.
+ *
+ * MUST be called after the authorisation checks, never before. A
+ * precondition answered first would tell a caller who has no right to the
+ * object that the object exists — which is precisely what the identical
+ * 404 for "absent" and "not yours" exists to hide.
+ */
+function requirePrecondition(req, res, currentETag) {
+  const ifMatch = req.get("If-Match");
+
+  // No precondition means the service has no basis on which to refuse a
+  // write that silently overwrites somebody else's change. Refusing the
+  // request is the only honest answer: RFC 6585 defines 428 for exactly
+  // this, and it tells the client what to do rather than guessing.
+  if (!ifMatch) {
+    problem(res, 428, "precondition-required", {
+      detail:
+        "This operation requires an If-Match header carrying the ETag of " +
+        "the version you last read. Read the resource first, then retry " +
+        "the write with that ETag."
+    });
+
+    return false;
+  }
+
+  // Somebody else wrote first. This is a normal condition, not a fault:
+  // the client refreshes, re-renders, and explains it in domain terms.
+  if (!matches(ifMatch, currentETag)) {
+    res.set("ETag", currentETag);
+
+    problem(res, 412, "precondition-failed", {
+      detail:
+        "This resource was changed by somebody else after you read it. " +
+        "Nothing has been modified. Read it again and decide what to do.",
+      currentVersion: currentETag
+    });
+
+    return false;
+  }
+
+  return true;
+}
+
+module.exports.requirePrecondition = requirePrecondition;

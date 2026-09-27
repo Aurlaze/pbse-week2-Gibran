@@ -198,3 +198,18 @@ code {
   .field-error { color: #f2b8b5; }
   .form-problem { border-color: #f2b8b5; }
 }
+
+/* A.8 — somebody else got there first. Deliberately not styled as an
+   error: nothing failed, the entity simply moved on while this page was
+   open, and the user is being shown where it moved to. */
+.form-notice {
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-left: 4px solid #6750a4;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .form-notice { border-left-color: #d0bcff; }
+}

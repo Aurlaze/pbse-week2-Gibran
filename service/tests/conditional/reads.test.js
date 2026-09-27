@@ -64,10 +64,23 @@ test("a write changes the tag, and the next poll sees the new data", async () =>
   const before = await service.request("GET", "/v1/bookings", { token });
   const staleTag = before.headers.get("etag");
 
-  await service.request("POST", `/v1/bookings/${booking.id}/cancellation`, {
+  // Reads the booking to obtain the version, then writes against it —
+  // the flow every client follows now that A.8 requires a precondition.
+  const read = await service.request("GET", `/v1/bookings/${booking.id}`, {
     token,
-    body: { reason: "Changed my mind" },
   });
+
+  const cancelled = await service.request(
+    "POST",
+    `/v1/bookings/${booking.id}/cancellation`,
+    {
+      token,
+      body: { reason: "Changed my mind" },
+      headers: { "If-Match": read.headers.get("etag") },
+    }
+  );
+
+  assert.equal(cancelled.status, 201);
 
   const after = await service.request("GET", "/v1/bookings", {
     token,

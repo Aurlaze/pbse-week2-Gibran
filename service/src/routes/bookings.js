@@ -22,7 +22,11 @@ const {
 } = require("../schemas/bookings");
 const { problem, invalidParam } = require("../problem");
 const requireScope = require("../auth/require-scope");
-const { sendRepresentation } = require("../etag");
+const {
+  computeETag,
+  requirePrecondition,
+  sendRepresentation
+} = require("../etag");
 const { mayReadBooking, mayCancelBooking } = require("../auth/ownership");
 
 const router = express.Router();
@@ -335,7 +339,27 @@ router.post(
       return notFound(res);
     }
 
-    // 5. work, then representation.
+    // 5. precondition -> 428 or 412.
+    //
+    // Deliberately here, after the authorisation checks and before any
+    // write. Answering the precondition first would tell a caller with no
+    // right to this booking that it exists, which is exactly what the
+    // identical 404 above hides. Answering it after the write would be a
+    // refusal about a change already made.
+    //
+    // The tag is computed from the same representation GET returns to this
+    // same principal, because that is the version the client actually saw.
+    // An administrator reading a fuller representation holds a different
+    // tag, correctly: they saw something different.
+    const currentVersion = computeETag(
+      toBookingRepresentation(booking, req.principal)
+    );
+
+    if (!requirePrecondition(req, res, currentVersion)) {
+      return undefined;
+    }
+
+    // 6. work, then representation.
     //
     // Already cancelled is 200 with the existing record, not 409: the
     // requested end state already holds, so the caller's intent has been

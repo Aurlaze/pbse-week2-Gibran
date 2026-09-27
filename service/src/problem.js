@@ -12,7 +12,9 @@ const TITLES = {
   "illegal-transition": "That status change is not permitted",
   "internal-error": "An unexpected error occurred",
   "unauthenticated": "Authentication required",
-  "insufficient-scope": "Insufficient scope"
+  "insufficient-scope": "Insufficient scope",
+  "precondition-required": "This operation must be conditional",
+  "precondition-failed": "The resource has changed since you last read it"
 };
 
 function problem(res, status, slug, options = {}) {

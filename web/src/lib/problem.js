@@ -42,6 +42,20 @@ export class Problem extends Error {
     return Object.keys(this.invalidParams).length > 0;
   }
 
+  // A.8 — somebody else wrote first. This is a normal condition, not a
+  // system failure: the work was refused, nothing was changed, and the
+  // client's move is to re-read and show the user what is actually there.
+  get isConflict() {
+    return this.status === 412;
+  }
+
+  // The client sent no precondition at all. A bug in this application
+  // rather than anything the user did, so it is worth telling them apart
+  // from a genuine conflict while developing.
+  get isPreconditionMissing() {
+    return this.status === 428;
+  }
+
   // What to show when there is nothing field-specific to say. `detail` is
   // written for this occurrence, `title` is fixed per type; either is in
   // domain terms, which "Request failed with status code 409" is not.

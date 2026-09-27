@@ -23,6 +23,11 @@ export default function CancelBooking() {
   const [localError, setLocalError] = useState(null);
   const [problem, setProblem] = useState(null);
 
+  // A.8 — set when somebody else got there first. Kept apart from
+  // `problem` because it is not a failure to apologise for: the booking
+  // simply moved on, and the user is being shown where it moved to.
+  const [overtaken, setOvertaken] = useState(false);
+
   // No idempotency key: the contract makes this operation naturally
   // idempotent. Cancelling an already-cancelled booking answers 200 with
   // the existing cancellation rather than refusing, because the end state
@@ -31,6 +36,7 @@ export default function CancelBooking() {
     event.preventDefault();
 
     setProblem(null);
+    setOvertaken(false);
 
     if (reason.trim() === "") {
       setLocalError("Say why the booking is being cancelled");
@@ -41,10 +47,25 @@ export default function CancelBooking() {
     setSubmitting(true);
 
     try {
-      await cancelBooking(bookingId, { reason: reason.trim() });
+      // A.8 — the write carries the version this screen was rendered from,
+      // so the service can refuse it if the booking moved on in the
+      // meantime. Without it the service has no basis for refusing, and a
+      // cancellation written on top of somebody else's would be lost
+      // silently.
+      await cancelBooking(bookingId, { reason: reason.trim() }, state.etag);
 
       navigate(`/bookings/${bookingId}`);
     } catch (refusal) {
+      if (refusal.isConflict) {
+        // Not an error banner. Somebody else got there first, nothing was
+        // changed, and the current data is fetched so the user can see
+        // what actually happened before deciding anything.
+        setOvertaken(true);
+        await retry();
+
+        return;
+      }
+
       setProblem(refusal);
     } finally {
       setSubmitting(false);
@@ -140,6 +161,17 @@ export default function CancelBooking() {
 
       {booking.startTime && <p>Start: {booking.startTime}</p>}
       {booking.endTime && <p>End: {booking.endTime}</p>}
+
+      {overtaken && (
+        <section className="form-notice" role="status">
+          <p>
+            This booking was already handled by somebody else while this page
+            was open — another window, or another device signed in as you.
+            Nothing you typed was saved, and the booking is shown below as it
+            stands now.
+          </p>
+        </section>
+      )}
 
       {formProblem && (
         <section className="form-problem" role="alert">

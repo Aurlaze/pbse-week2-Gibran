@@ -326,3 +326,68 @@ dropped everything downstream of it. `vite build` reported success and
 emitted React with none of this application in it. The check fails the build
 if the bundle no longer contains our own code.
 
+## A.8 Conditional Writes
+
+**`If-Match` is required, not optional.** A write against an entity another
+client can change concurrently must say which version it was written
+against. Without one the service has no basis on which to refuse a write
+that silently overwrites somebody else's change — the lost update — so a
+request arriving without the header is refused with `428 Precondition
+Required` (RFC 6585) rather than guessed at. `If-Match: *` is accepted and
+means "whatever version is current": an explicit decision, not an omission.
+
+**The precondition is checked after authorisation, never before.** The
+order in `POST /v1/bookings/{id}/cancellation` is: validate (400) → load →
+absent (404) → not yours (404) → precondition (428/412) → write. A
+precondition answered first would tell a caller with no right to a booking
+that the booking exists, which is exactly what the identical 404 for
+"absent" and "not yours" exists to hide. A test asserts that probing
+somebody else's booking returns 404 whether the precondition is missing or
+wrong.
+
+**The tag is computed from the representation the caller saw.** An
+administrator reading a fuller representation of a booking holds a
+different tag from the student who owns it — correctly, because they read
+something different.
+
+**A 412 is a normal condition, not an error.** The client does not show an
+error banner. It re-reads, re-renders, and says in domain terms that
+somebody else got there first:
+
+> This booking was already handled by somebody else while this page was
+> open — another window, or another device signed in as you. Nothing you
+> typed was saved, and the booking is shown below as it stands now.
+
+The 412 carries the current `ETag`, so a client can recover without an
+extra round trip to discover what it missed.
+
+**The court-management screen reads before it writes.** The list's ETag is
+the version of the *collection*, which is not the version of any one court
+in it. Retiring a court therefore reads that court first and writes against
+its own version.
+
+Covered by `service/tests/conditional/writes.test.js` — 9 tests including
+the two-windows scenario end to end, that a refused write leaves the
+original reason intact, and that the precondition leaks nothing.
+
+### Open finding: the retirement operation is not implemented
+
+`POST /v1/courts/{courtId}/retirement` (`deactivateCourt`) is documented in
+`openapi.yaml` and is named by the "Manage courts" workflow in the A.1
+table, but **the service does not implement it** — `routes/courts.js`
+registers only the two GETs. The client calls it and receives the
+service's 404 handler.
+
+This is recorded here rather than worked around, per A.1. Until it is
+implemented, the "Manage courts" workflow cannot run end to end. It is
+blocked twice over: see also the scopes note below.
+
+### Open finding: the web client cannot obtain `courts:write`
+
+`badminton-student-web` does not list `courts:write` in its default or
+optional scopes, and `badminton-admin-web` — which does — has
+`https://admin.badminton.example/callback` as its only redirect URI, which
+no deployment of this application can reach. Whichever way the retirement
+operation is eventually implemented, an administrator cannot currently
+sign in to a client that can call it.
+

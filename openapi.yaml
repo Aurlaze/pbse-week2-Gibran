@@ -454,7 +454,13 @@ paths:
                     Why the booking is being cancelled. Free text, one to
                     500 characters, no control characters.
                   example: Cannot make the booked slot
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
       responses:
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '200':
           description: Already cancelled. The existing record is returned.
           content:
@@ -552,7 +558,13 @@ paths:
                 reason:
                   type: string
                   example: Replaced by a newer revision
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
       responses:
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '200':
           description: Already retired. The existing record is returned.
           content:
@@ -620,6 +632,26 @@ components:
             bookings:fulfil: Manage all bookings for the scheduled cleanup job
 
   parameters:
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        The `ETag` of the version the client last read. The write is
+        applied only if that is still the current version.
+
+        Required, not optional. With no precondition the service has no
+        basis on which to refuse a write that overwrites somebody else's
+        change — the lost update — so a request without this header is
+        refused with `428`. Read the resource, take its `ETag`, then
+        write against it.
+
+        `*` is accepted and means "whatever version is current": an
+        explicit decision not to care, rather than an omission.
+      schema:
+        type: string
+        example: '"v8m6WCTfmEMOvl8xpz5syHmURr7"'
 
     IfNoneMatch:
       name: If-None-Match
@@ -879,6 +911,45 @@ components:
         example: private, no-cache
 
   responses:
+
+    PreconditionRequired:
+      description: |
+        The request carried no `If-Match`. Nothing was changed.
+
+        This operation changes an entity that another client can change
+        concurrently, so it must be conditional; see RFC 6585.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.example.com/problems/precondition-required
+            title: This operation must be conditional
+            status: 428
+            detail: >-
+              This operation requires an If-Match header carrying the ETag
+              of the version you last read.
+
+    PreconditionFailed:
+      description: |
+        Somebody else wrote first. Nothing was changed.
+
+        This is a normal condition, not a system failure. A correct
+        client re-reads the resource, re-renders it, and explains in
+        domain terms that the entity has already been dealt with — it
+        does not present this as an error.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://api.example.com/problems/precondition-failed
+            title: The resource has changed since you last read it
+            status: 412
+            detail: >-
+              This resource was changed by somebody else after you read
+              it. Nothing has been modified.
 
     NotModified:
       description: |

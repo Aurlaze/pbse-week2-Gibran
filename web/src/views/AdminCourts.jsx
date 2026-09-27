@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { listCourts, retireCourt } from "../services/api";
+import { getCourt, listCourts, retireCourt } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
 import { useResource } from "../lib/useResource";
 import { SkeletonList } from "../components/Skeleton";
@@ -24,17 +24,34 @@ export default function AdminCourts() {
   const [retiring, setRetiring] = useState(null);
   const [actionProblem, setActionProblem] = useState(null);
 
+  const [overtaken, setOvertaken] = useState(false);
+
   async function handleRetire(courtId) {
     setRetiring(courtId);
     setActionProblem(null);
+    setOvertaken(false);
 
     try {
-      await retireCourt(courtId, { reason: "Retired by administrator" });
+      // A.8 — the write needs the version of THIS court, and the list's
+      // ETag is the version of the collection, which is a different thing.
+      // So the court is read first and the write carries that version.
+      const { etag } = await getCourt(courtId);
+
+      await retireCourt(courtId, { reason: "Retired by administrator" }, etag);
 
       // Re-read in the background: the list stays on screen while the
       // updated statuses arrive.
       await refresh();
     } catch (problem) {
+      if (problem.isConflict) {
+        // Somebody else changed this court between the read and the write.
+        // Nothing happened; show what is there now.
+        setOvertaken(true);
+        await refresh();
+
+        return;
+      }
+
       setActionProblem(problem);
     } finally {
       setRetiring(null);
@@ -124,6 +141,15 @@ export default function AdminCourts() {
       <h1>{TITLE}</h1>
 
       <StaleNotice state={state} noun="courts" />
+
+      {overtaken && (
+        <section className="form-notice" role="status">
+          <p>
+            That court was changed by a colleague while this page was open.
+            Nothing was modified, and the list below is as it stands now.
+          </p>
+        </section>
+      )}
 
       {actionProblem && (
         <section role="alert">
