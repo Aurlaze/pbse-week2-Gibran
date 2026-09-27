@@ -55,7 +55,7 @@ pbse-week2-Gibran/
 | View and cancel booking | Cancellation form | Student | GET /v1/bookings/{bookingId}, POST /v1/bookings/{bookingId}/cancellation | 2 |
 | Manage courts | Court management list | Administrator | GET /v1/courts | 1 |
 | Manage courts | Court management detail | Administrator | GET /v1/courts/{courtId} | 1 |
-| Manage courts | Retirement form | Administrator | POST /v1/courts/{courtId}/retirement | 1 |
+| Manage courts | Retirement action | Administrator | GET /v1/courts/{courtId}, POST /v1/courts/{courtId}/retirement | 2 |
 
 ## A.3 Session Storage and Security
 
@@ -370,24 +370,62 @@ Covered by `service/tests/conditional/writes.test.js` — 9 tests including
 the two-windows scenario end to end, that a refused write leaves the
 original reason intact, and that the precondition leaks nothing.
 
-### Open finding: the retirement operation is not implemented
+### Resolved: the retirement operation, and who may call it
 
-`POST /v1/courts/{courtId}/retirement` (`deactivateCourt`) is documented in
-`openapi.yaml` and is named by the "Manage courts" workflow in the A.1
-table, but **the service does not implement it** — `routes/courts.js`
-registers only the two GETs. The client calls it and receives the
-service's 404 handler.
+Both findings recorded here during A.8 are now closed.
 
-This is recorded here rather than worked around, per A.1. Until it is
-implemented, the "Manage courts" workflow cannot run end to end. It is
-blocked twice over: see also the scopes note below.
+`POST /v1/courts/{courtId}/retirement` (`deactivateCourt`) was documented in
+`openapi.yaml` from Session 2 and never implemented — `routes/courts.js`
+registered two GETs and nothing else, so the client's call met the 404
+handler. It is now implemented, following the same five-step order as the
+cancellation: validate, load, absent 404, precondition, write. Retiring an
+already retired court answers 200 with the existing record, not 409, because
+the end state the caller asked for already holds. The `courts` table gained
+`retired_at` and `retire_reason`; `db/schema.sql` applies them with
+`ADD COLUMN IF NOT EXISTS`, so `npm run db:setup` brings an existing
+database up to date.
 
-### Open finding: the web client cannot obtain `courts:write`
+Who may call it was the larger problem. Nothing distinguished the six test
+users — all held only `default-roles-badminton-booking` — so `admin-a` and
+`student-a` were the same person as far as the platform was concerned, and
+permission came from which OAuth client you signed in through rather than
+from who you are. Separately, `courts:write` carried
+`include.in.token.scope: "false"`, so it never reached a token's `scope`
+claim and `requireScope("courts:write")` would have refused everybody.
 
-`badminton-student-web` does not list `courts:write` in its default or
-optional scopes, and `badminton-admin-web` — which does — has
-`https://admin.badminton.example/callback` as its only redirect URI, which
-no deployment of this application can reach. Whichever way the retirement
-operation is eventually implemented, an administrator cannot currently
-sign in to a client that can call it.
+The realm now has `student`, `staff` and `administrator` roles, held by the
+matching test users, and the two powerful scopes are limited to the roles
+that should be able to obtain them. There is one web client for everybody.
+The reasoning, and why this does not reverse the Session 4 decision to
+authorise on scopes rather than roles, is in
+`docs/decisions/0004-peran-dan-penerbitan-scope.md`.
 
+## Test accounts for the demonstration
+
+All six accounts use the password `password`. Two are used in the
+presentation:
+
+| Account | Role | Scopes in the token | What they demonstrate |
+|---|---|---|---|
+| `student-a` | `student` | `courts:read`, `bookings:read`, `bookings:write` | Browsing courts, booking, cancelling — and being refused court management |
+| `admin-a` | `administrator` | the above plus `courts:write`, `bookings:fulfil` | Retiring a court, and the 412 when two windows do it at once |
+
+`student-b`, `admin-b`, `staff-a` and `staff-b` exist for the concurrency
+and object-authorisation tests.
+
+### Still to verify against a running Keycloak
+
+The realm changes above have not been run against Keycloak — no container
+was available while they were made. After `docker compose -f
+infra/docker-compose.auth.yml up` and re-importing the realm, two checks
+matter:
+
+1. Sign in as `student-a` and read `window.__token` (or the Network tab).
+   The `scope` claim must **not** contain `courts:write`.
+2. Run the A.9 console attack as `student-a`:
+   `POST /v1/courts/{id}/retirement` must answer **403**.
+
+A 200 or a leaked scope in check 1 means the realm is not withholding the
+scope by role, and the service needs to check the role itself in addition to
+the scope. Everything needed for that is in place; only the decision would
+change.

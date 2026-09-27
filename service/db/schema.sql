@@ -8,8 +8,20 @@ CREATE TABLE IF NOT EXISTS courts (
     location VARCHAR(150) NOT NULL,
     court_type VARCHAR(20) NOT NULL,
     is_available BOOLEAN NOT NULL,
-    status VARCHAR(20) NOT NULL
+    status VARCHAR(20) NOT NULL,
+
+    -- Retirement is terminal: a court leaves 'active' once and never
+    -- returns. The reason and the moment are kept because the contract
+    -- returns them as a record of their own.
+    retired_at TIMESTAMPTZ,
+    retire_reason TEXT
 );
+
+-- Written by POST /v1/courts/{courtId}/retirement. Added separately as well
+-- as in the CREATE TABLE above, for the same reason as the booking columns
+-- below: deployed databases already have this table.
+ALTER TABLE courts ADD COLUMN IF NOT EXISTS retired_at TIMESTAMPTZ;
+ALTER TABLE courts ADD COLUMN IF NOT EXISTS retire_reason TEXT;
 
 -- Columns derived from the Booking schema in openapi.yaml, plus created_at
 -- and the three columns authorisation needs.

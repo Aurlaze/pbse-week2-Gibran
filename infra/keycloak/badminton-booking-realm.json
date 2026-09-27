@@ -85,6 +85,24 @@
         "clientRole": false,
         "containerId": "ac9e3830-8230-4302-bc9f-435537dda2d9",
         "attributes": {}
+      },
+      {
+        "name": "student",
+        "description": "Books courts for themselves. The default for a person.",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "staff",
+        "description": "Handles bookings made by others. Does not manage courts.",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "administrator",
+        "description": "Manages the courts themselves, including retirement.",
+        "composite": false,
+        "clientRole": false
       }
     ],
     "client": {
@@ -466,6 +484,19 @@
       "clientScope": "offline_access",
       "roles": [
         "offline_access"
+      ]
+    },
+    {
+      "clientScope": "courts:write",
+      "roles": [
+        "administrator"
+      ]
+    },
+    {
+      "clientScope": "bookings:fulfil",
+      "roles": [
+        "administrator",
+        "staff"
       ]
     }
   ],
@@ -872,7 +903,9 @@
         "phone",
         "organization",
         "offline_access",
-        "microprofile-jwt"
+        "microprofile-jwt",
+        "courts:write",
+        "bookings:fulfil"
       ]
     },
     {
@@ -1353,7 +1386,7 @@
       "description": "Retire or update badminton courts",
       "protocol": "openid-connect",
       "attributes": {
-        "include.in.token.scope": "false",
+        "include.in.token.scope": "true",
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
@@ -2714,7 +2747,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "student"
       ],
       "clientRoles": {}
     },
@@ -2734,7 +2768,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "student"
       ],
       "clientRoles": {}
     },
@@ -2754,7 +2789,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "administrator"
       ],
       "clientRoles": {}
     },
@@ -2774,7 +2810,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "administrator"
       ],
       "clientRoles": {}
     },
@@ -2794,7 +2831,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "staff"
       ],
       "clientRoles": {}
     },
@@ -2814,7 +2852,8 @@
         }
       ],
       "realmRoles": [
-        "default-roles-badminton-booking"
+        "default-roles-badminton-booking",
+        "staff"
       ],
       "clientRoles": {}
     }

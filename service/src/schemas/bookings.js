@@ -74,58 +74,12 @@ function parseNewBooking(body) {
   };
 }
 
-// Control characters, NUL included. A NUL byte cannot be stored in a
-// Postgres text column at all: the driver sends it, the server refuses the
-// whole statement, and the handler that was merely passing a string along
-// ends up answering 500 to a request that was never valid in the first
-// place. Rejecting it here makes that a 400, which is what it always was.
-
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
-const REASON_MAX_LENGTH = 500;
-
-// Matches the cancellation requestBody in openapi.yaml.
+// The cancellation reason follows the same rule as the retirement reason;
+// it lives in schemas/reason.js so the two cannot drift apart.
+const { parseReason, MAX_LENGTH: REASON_MAX_LENGTH } = require("./reason");
 
 function parseCancellation(body) {
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return {
-      ok: false,
-      invalidParams: [invalidParam("body", "A JSON object is required")]
-    };
-  }
-
-  const { reason } = body;
-
-  if (typeof reason !== "string" || reason.trim() === "") {
-    return {
-      ok: false,
-      invalidParams: [
-        invalidParam("reason", "Say why the booking is being cancelled")
-      ]
-    };
-  }
-
-  if (reason.length > REASON_MAX_LENGTH) {
-    return {
-      ok: false,
-      invalidParams: [
-        invalidParam(
-          "reason",
-          `Keep the reason under ${REASON_MAX_LENGTH} characters`
-        )
-      ]
-    };
-  }
-
-  if (CONTROL_CHARACTERS.test(reason)) {
-    return {
-      ok: false,
-      invalidParams: [
-        invalidParam("reason", "The reason contains characters that cannot be stored")
-      ]
-    };
-  }
-
-  return { ok: true, data: { reason: reason.trim() } };
+  return parseReason(body, "Say why the booking is being cancelled");
 }
 
 module.exports = {

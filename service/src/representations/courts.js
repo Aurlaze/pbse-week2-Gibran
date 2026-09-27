@@ -9,6 +9,17 @@ function toCourtRepresentation(court) {
   };
 }
 
+// The Retirement schema from openapi.yaml: a record of its own, which is
+// what a sub-resource buys over a PATCH setting status.
+function toRetirementRepresentation(court) {
+  return {
+    courtId: court.id,
+    reason: court.retire_reason,
+    retiredAt: new Date(court.retired_at).toISOString()
+  };
+}
+
 module.exports = {
-  toCourtRepresentation
+  toCourtRepresentation,
+  toRetirementRepresentation
 };
