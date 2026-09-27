@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { getBookings } from "../services/api";
+import { listBookings } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
 import { useResource } from "../lib/useResource";
 import { SkeletonList } from "../components/Skeleton";
@@ -11,15 +11,14 @@ const TITLE = "My Bookings";
 export default function Bookings() {
   const { login } = useAuth();
 
-  const { state, retry } = useResource(
-    async () => {
-      const data = await getBookings();
+  const { state, retry } = useResource(listBookings, "", {
+    collection: true,
+    select: (body) => body.items ?? body,
 
-      return data.items ?? data;
-    },
-    "",
-    { collection: true }
-  );
+    // A.7 — a student's own list, polled so a cancellation made in another
+    // tab appears here. Unchanged cycles answer 304 with no body.
+    pollMs: 15_000,
+  });
 
   if (state.kind === "loading") {
     return (

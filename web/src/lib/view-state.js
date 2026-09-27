@@ -35,13 +35,21 @@ export function failed(problem, willRetry = false) {
 // later refresh has failed since, and `lastAttempt` is when that failure
 // happened — the three facts needed to tell the user how old what they are
 // reading is.
-export function content(data, { fetchedAt, stale = false, lastAttempt = null } = {}) {
+export function content(
+  data,
+  { fetchedAt, stale = false, lastAttempt = null, etag = null } = {}
+) {
   return {
     kind: "content",
     data,
     fetchedAt: fetchedAt ?? new Date(),
     stale,
     lastAttempt,
+
+    // The version this data was read at. A write against it carries this
+    // back in If-Match, which is what lets the service refuse a change
+    // made on top of somebody else's (A.8).
+    etag,
   };
 }
 

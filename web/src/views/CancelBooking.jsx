@@ -16,7 +16,7 @@ export default function CancelBooking() {
 
   // The booking is loaded rather than carried here in router state: this
   // screen has an address of its own and must work when it is opened cold.
-  const { state, retry } = useResource((id) => getBooking(id), bookingId);
+  const { state, retry } = useResource(getBooking, bookingId);
 
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);

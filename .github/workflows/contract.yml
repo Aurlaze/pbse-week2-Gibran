@@ -142,6 +142,13 @@ jobs:
         run: npm run test:cors
         working-directory: service
 
+      # A.7/A.8: conditional reads and writes. These need the database, so
+      # they run here alongside the authorisation tests rather than in the
+      # dependency-free CORS job above.
+      - name: Conditional request tests
+        run: npm run test:conditional
+        working-directory: service
+
       - name: Service log
         if: always()
         run: |

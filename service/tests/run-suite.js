@@ -1,4 +1,5 @@
-// Runs every test file in tests/authz/ with the built-in test runner.
+// Runs every test file in a tests/<suite>/ directory with the built-in
+// test runner. The suite name is the first argument.
 //
 // This exists because `node --test` does not take the same arguments on
 // every Node version:
@@ -18,7 +19,14 @@ const { readdirSync } = require("node:fs");
 const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const directory = join(__dirname, "authz");
+const [suite, ...passThrough] = process.argv.slice(2);
+
+if (!suite) {
+  console.error("usage: node tests/run-suite.js <directory> [node --test args]");
+  process.exit(1);
+}
+
+const directory = join(__dirname, suite);
 
 const files = readdirSync(directory)
   .filter((name) => name.endsWith(".test.js"))
@@ -30,11 +38,11 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-console.log(`running ${files.length} authorisation test files`);
+console.log(`running ${files.length} test file(s) from tests/${suite}/`);
 
 const result = spawnSync(
   process.execPath,
-  ["--test", ...process.argv.slice(2), ...files],
+  ["--test", ...passThrough, ...files],
   { stdio: "inherit" }
 );
 

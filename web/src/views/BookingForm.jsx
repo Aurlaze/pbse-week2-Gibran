@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { createBooking, getCourts } from "../services/api";
+import { createBooking, listCourts } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
 import { useResource } from "../lib/useResource";
 import { SkeletonDetail } from "../components/Skeleton";
@@ -61,15 +61,10 @@ export default function BookingForm() {
 
   // The court list fills the picker. Free text would invite a 422 for a
   // court that does not exist, when the set of courts is knowable.
-  const courts = useResource(
-    async () => {
-      const data = await getCourts();
-
-      return data.items ?? data;
-    },
-    "",
-    { collection: true }
-  );
+  const courts = useResource(listCourts, "", {
+    collection: true,
+    select: (body) => body.items ?? body,
+  });
 
   // A.6 item 3 — the idempotency key is the guarantee; the disabled button
   // is only prevention. The key identifies *this booking attempt*, so it is
@@ -98,7 +93,7 @@ export default function BookingForm() {
     setSubmitting(true);
 
     try {
-      const booking = await createBooking(
+      const { data: booking } = await createBooking(
         {
           courtId,
           startTime: toRfc3339(startTime),

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getCourts, retireCourt } from "../services/api";
+import { listCourts, retireCourt } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
 import { useResource } from "../lib/useResource";
 import { SkeletonList } from "../components/Skeleton";
@@ -12,15 +12,11 @@ const TITLE = "Court Management";
 export default function AdminCourts() {
   const { login } = useAuth();
 
-  const { state, retry, refresh } = useResource(
-    async () => {
-      const data = await getCourts();
-
-      return data.items ?? data;
-    },
-    "",
-    { collection: true }
-  );
+  const { state, retry, refresh } = useResource(listCourts, "", {
+    collection: true,
+    select: (body) => body.items ?? body,
+    pollMs: 30_000,
+  });
 
   // The action's failure is kept apart from the read's state on purpose. A
   // refused retirement says so next to the list; it does not replace the

@@ -10,10 +10,11 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:setup": "node db/apply.js",
-    "test": "npm run test:authz && npm run test:cors",
-    "test:authz": "node tests/run-authz.js",
+    "test": "npm run test:authz && npm run test:cors && npm run test:conditional",
+    "test:authz": "node tests/run-suite.js authz",
     "test:contract": "bash ../tests/contract/run.sh",
-    "test:cors": "node --test tests/cors/cors.test.js"
+    "test:cors": "node tests/run-suite.js cors",
+    "test:conditional": "node tests/run-suite.js conditional"
   },
   "keywords": [],
   "author": "",

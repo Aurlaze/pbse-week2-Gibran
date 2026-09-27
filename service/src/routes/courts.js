@@ -3,6 +3,7 @@ const { findCourtById, findAllCourts } = require("../store/courts");
 const { toCourtRepresentation } = require("../representations/courts");
 const { problem, invalidParam } = require("../problem");
 const requireScope = require("../auth/require-scope");
+const { sendRepresentation } = require("../etag");
 
 const router = express.Router();
 
@@ -87,7 +88,9 @@ router.get("/courts", requireScope("courts:read"), async (req, res) => {
       ? Buffer.from(courts[courts.length - 1].id).toString("base64")
       : undefined;
 
-  return res.status(200).json({
+  // A.7 — a polled collection carries an ETag, so the next poll can ask
+  // whether anything changed instead of fetching the list again.
+  return sendRepresentation(req, res, {
     items,
     ...(nextCursor && { nextCursor })
   });
@@ -129,8 +132,9 @@ router.get(
       });
     }
 
-    // Representation
-    return res.status(200).json(toCourtRepresentation(court));
+    // Representation. The ETag here is what a write against this court
+    // sends back in If-Match (A.8).
+    return sendRepresentation(req, res, toCourtRepresentation(court));
   }
 );
 

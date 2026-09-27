@@ -22,6 +22,7 @@ const {
 } = require("../schemas/bookings");
 const { problem, invalidParam } = require("../problem");
 const requireScope = require("../auth/require-scope");
+const { sendRepresentation } = require("../etag");
 const { mayReadBooking, mayCancelBooking } = require("../auth/ownership");
 
 const router = express.Router();
@@ -239,7 +240,10 @@ router.get("/bookings", requireScope("bookings:read"), async (req, res) => {
     ? Buffer.from(bookings[bookings.length - 1].id).toString("base64")
     : undefined;
 
-  return res.status(200).json({
+  // A.7 — the polled collection. The ETag is derived from this student's
+  // own representation, so two students polling at the same moment get
+  // different tags and neither can learn anything about the other's list.
+  return sendRepresentation(req, res, {
     items,
     ...(nextCursor && { nextCursor })
   });
@@ -275,8 +279,14 @@ router.get(
       return notFound(res);
     }
 
-    // 5. representation
-    return res.status(200).json(toBookingRepresentation(booking, req.principal));
+    // 5. representation. The ETag travels back in If-Match when this
+    // booking is cancelled (A.8), which is what makes the lost update
+    // detectable.
+    return sendRepresentation(
+      req,
+      res,
+      toBookingRepresentation(booking, req.principal)
+    );
   }
 );
 

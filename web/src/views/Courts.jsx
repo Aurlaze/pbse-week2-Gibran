@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { getCourts } from "../services/api";
+import { listCourts } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
 import { useResource } from "../lib/useResource";
 import { SkeletonList } from "../components/Skeleton";
@@ -11,15 +11,14 @@ const TITLE = "Badminton Courts";
 export default function Courts() {
   const { login } = useAuth();
 
-  const { state, retry } = useResource(
-    async () => {
-      const data = await getCourts();
+  const { state, retry } = useResource(listCourts, "", {
+    collection: true,
+    select: (body) => body.items ?? body,
 
-      return data.items ?? data;
-    },
-    [],
-    { collection: true }
-  );
+    // A.7 — polled, so an unchanged list costs a 304 rather than the whole
+    // collection. Courts change rarely; the interval says so.
+    pollMs: 30_000,
+  });
 
   // A.5 — the view branches on the four states and nothing else. Every
   // branch below renders something; none of them can fall through to a

@@ -265,3 +265,64 @@ user is not shown a refusal they did not cause.
 Covered by `web/src/lib/problem.test.js` and, on the service side, by the
 cancellation-reason case in `service/tests/authz/layer2-scope.test.js`.
 
+## A.7 Conditional Reads
+
+**Every read carries an `ETag`.** `service/src/etag.js` derives it from the
+representation itself — a SHA-256 of the body — so the tag changes when, and
+only when, what the client would receive changes. Deriving it from a row's
+`updated_at` would miss two changes inside one clock tick and would not
+notice a change in how the representation is rendered. It is strong, not
+weak, which is what makes it safe to reuse for `If-Match` in A.8.
+
+**What a 304 saves is the body, not the work.** The service still loads the
+data and decides what the current version is before it can answer at all. A
+client polling every fifteen seconds receives an empty response instead of
+its whole booking list, which is the saving.
+
+**The tags outlive re-renders.** `web/src/lib/etag-store.js` holds them for
+as long as the page does, keyed by request path, so `/bookings` and
+`/bookings?status=confirmed` are separate versions. A tag kept in a variable
+inside the polling function would be recreated on every cycle: no poll would
+ever send `If-None-Match`, the service could never answer 304, and the
+saving would silently never happen while nothing looked broken.
+
+The stored body sits beside the tag, because a 304 has none. Without it a
+304 would be a successful read the client could not render — which looks
+like empty data, and is worse than an error.
+
+**A 304 is a successful read.** `useResource` treats it as confirmation that
+what is held is current: the stale marker is cleared and `fetchedAt` moves
+forward, because the service has just said this version is current as of
+now.
+
+**Polling** runs on the two collections — courts every 30s, bookings every
+15s — as background reads, so the list on screen is never replaced by a
+skeleton. A tab nobody is looking at is not polled.
+
+**Cache-Control: private, no-cache** accompanies every ETag. These
+representations are shaped by who asked — a student's booking list is theirs
+alone — so a shared cache must not reuse one for somebody else. Signing out
+clears the store, so the next person at the browser finds nothing.
+
+**Cursor pagination, not offset**, was already in place from Session 3 and
+is unchanged: both collections page by a cursor naming a row, which keeps
+its identity however many rows are inserted above it.
+
+`ETag` is readable by the page only because A.4 lists it in
+`Access-Control-Expose-Headers`. Browsers hide all but a short default list
+of response headers, and an ETag the client cannot read is one it cannot
+send back.
+
+Covered by `service/tests/conditional/reads.test.js` (9 tests, against a
+real database) and `web/src/lib/etag-store.test.js`.
+
+### A note on the build
+
+`npm run build` in `web/` runs `scripts/verify-build.js` afterwards. During
+A.7 a `throw` at module scope guarding a missing `VITE_` variable was found
+to have deleted the entire application from the bundle: Vite inlines
+`import.meta.env` at build time, the guard became unconditional, and Rollup
+dropped everything downstream of it. `vite build` reported success and
+emitted React with none of this application in it. The check fails the build
+if the bundle no longer contains our own code.
+

@@ -13,7 +13,7 @@ export default function CourtDetail() {
 
   // The id comes from the URL and is the key: opening /courts/{id} in a new
   // tab loads that court, and changing the id loads the other one.
-  const { state, retry } = useResource((id) => getCourt(id), courtId);
+  const { state, retry } = useResource(getCourt, courtId);
 
   if (state.kind === "loading") {
     return (

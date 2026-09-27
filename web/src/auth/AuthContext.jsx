@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import keycloak, { REQUESTED_SCOPES } from "./keycloak";
+import { forgetAll } from "../lib/etag-store";
 
 const AuthContext = createContext(null);
 
@@ -71,6 +72,7 @@ export function AuthProvider({ children }) {
         getCurrentLocation()
       );
 
+      forgetAll();
       keycloak.clearToken();
       setAuthenticated(false);
       setScopes([]);
@@ -103,6 +105,11 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     sessionStorage.removeItem(RETURN_TO_KEY);
+
+    // The cached representations go with the session. The next person to
+    // use this browser must not find the previous one's bookings in memory.
+    forgetAll();
+
     keycloak.clearToken();
     setAuthenticated(false);
     setScopes([]);

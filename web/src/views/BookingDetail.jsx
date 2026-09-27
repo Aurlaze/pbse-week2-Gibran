@@ -12,7 +12,7 @@ export default function BookingDetail() {
 
   // Keyed on the id in the URL, so this screen can be copied into a second
   // tab mid-workflow and shows the same booking rather than the start page.
-  const { state, retry } = useResource((id) => getBooking(id), bookingId);
+  const { state, retry } = useResource(getBooking, bookingId);
 
   if (state.kind === "loading") {
     return (
