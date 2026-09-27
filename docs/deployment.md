@@ -126,3 +126,56 @@ outside its own code: add that origin to `CORS_ALLOWED_ORIGINS` here, and
 add `<origin>/callback` to the Keycloak client's redirect URIs. Forgetting
 the first shows up as a CORS error in the console; forgetting the second
 shows up as a Keycloak error page before the application ever loads.
+
+---
+
+# Deploying the web application
+
+A second Vercel project, from the same repository. The service and the web
+application are separate deployments with separate addresses — which is the
+whole reason CORS exists between them.
+
+1. **New Project**, same repository.
+2. **Set Root Directory to `web`.**
+3. Framework preset: **Vite**.
+4. Under **Environment Variables**, add all of these, applied to Production,
+   Preview and Development:
+
+   | Variable | Value |
+   |---|---|
+   | `VITE_API_BASE_URL` | the deployed service, including `/v1`, no trailing slash |
+   | `VITE_KEYCLOAK_URL` | the Keycloak address |
+   | `VITE_KEYCLOAK_REALM` | `badminton-booking` |
+   | `VITE_KEYCLOAK_CLIENT_ID` | `badminton-student-web` |
+   | `VITE_KEYCLOAK_SCOPES` | `bookings:write courts:write` |
+
+   Every one of these is baked into the bundle at build time and is readable
+   by anyone who opens the page. None of them is a secret, and none of them
+   can be changed without rebuilding.
+
+5. **Deploy.**
+
+## Three things to do after the first deployment
+
+The application's address is not known until it exists, and three separate
+places need to be told what it is. Each failure looks different:
+
+| Where | What to add | Symptom if forgotten |
+|---|---|---|
+| The service's `CORS_ALLOWED_ORIGINS` | the web application's origin | A CORS error in the console. The request still reached the service and was still processed — only the reply is withheld from the page |
+| The Keycloak client's **Valid redirect URIs** | `<origin>/callback` | A Keycloak error page before the application ever loads |
+| The Keycloak client's **Web origins** | the origin | Sign-in succeeds, then token refresh fails |
+
+## Why `vercel.json` is there
+
+`web/vercel.json` rewrites every path to `index.html`, and
+`web/public/_redirects` does the same for Netlify-style hosts.
+
+Without it the routing works only while navigating inside the application.
+The moment somebody opens `/bookings/bkg_abc123` directly — pasting a link,
+refreshing the page, or opening a screen in a second tab — the host looks
+for a file at that path, does not find one, and answers 404. The application
+never loads and React Router never gets to see the URL.
+
+That is not a cosmetic problem: reloading a screen and opening one in a new
+tab are two of the six things the grader does.

@@ -1,0 +1,310 @@
+===============================================================================
+A.9 RUNBOOK - ATTACK YOUR OWN APPLICATION
+Badminton Court Booking / PBSE Session 5
+===============================================================================
+
+WHAT THIS IS FOR
+  A.9 is a condition of passing the assignment. You sign in as an account
+  that lacks a right, then send that operation anyway - from the console,
+  and by typing the URL. The service must refuse it.
+
+  PASS = the service answers 403 or 404.
+  FAIL = the service answers 200. That means the interface was only HIDING
+         the control, never refusing it, and no amount of client code fixes
+         it. Run this early: if it fails, the backend needs work.
+
+  Total time if nothing goes wrong: about 20 minutes.
+  You can do all of this alone. Nothing here needs a teammate.
+
+
+-------------------------------------------------------------------------------
+BEFORE YOU START - 3 CONFIG FILES
+-------------------------------------------------------------------------------
+
+These are missing right now and everything will fail without them.
+
+[ ] 1. service/.env
+       APPEND these four lines. The file currently has only DATABASE_URL and
+       PORT, and src/config.js refuses to start the service without these.
+
+           OIDC_ISSUER=http://localhost:8080/realms/badminton-booking
+           OIDC_JWKS_URI=http://localhost:8080/realms/badminton-booking/protocol/openid-connect/certs
+           OIDC_AUDIENCE=badminton-api
+           CORS_ALLOWED_ORIGINS=http://localhost:5173
+
+[ ] 2. web/.env.local
+
+           cp web/.env.example web/.env.local
+
+       The defaults in it are already correct for local work.
+
+[ ] 3. infra/.env
+       The compose file reads KC_ADMIN_PASSWORD and it is not set anywhere.
+
+           echo "KC_ADMIN_PASSWORD=admin" > infra/.env
+
+
+-------------------------------------------------------------------------------
+WARNING - YOUR DATABASE IS SHARED
+-------------------------------------------------------------------------------
+
+DATABASE_URL points at the group's Neon database, not localhost. Two things
+follow from that:
+
+  * Retiring a court is TERMINAL. There is no operation that brings one
+    back. If an attack succeeds against a seeded court, that court is gone
+    for everyone, including during the Session 7 demo.
+    -> Step 4 below creates a throwaway court to aim at.
+
+  * A teammate rehearsing at the same time will see rows appear and vanish.
+    Tell the group before you start, or point DATABASE_URL at a local
+    Postgres for the whole exercise.
+
+If something does get retired by accident, re-seeding will NOT fix it -
+seed.sql uses ON CONFLICT DO NOTHING, so it skips rows that already exist.
+The undo is SQL:
+
+    UPDATE courts SET status='active', is_available=true,
+                      retired_at=NULL, retire_reason=NULL
+    WHERE status='retired';
+
+    -- crt_93Lm27qR is seeded with is_available=false on purpose:
+    UPDATE courts SET is_available=false WHERE id='crt_93Lm27qR';
+
+
+-------------------------------------------------------------------------------
+STEP 1 - KEYCLOAK
+-------------------------------------------------------------------------------
+
+The -v matters. It deletes the old volume. Without it Keycloak keeps the
+realm it already has, your role changes are ignored, and you will spend an
+hour debugging a service that is behaving correctly.
+
+    docker compose -f infra/docker-compose.auth.yml down -v
+    docker compose -f infra/docker-compose.auth.yml up
+
+Wait for:  Listening on: http://0.0.0.0:8080
+Leave this terminal running.
+
+[ ] CHECK THE ROLES IMPORTED. Do not skip this.
+    Open http://localhost:8080  (admin / admin)
+    -> realm "badminton-booking" -> Realm roles
+    You must see:  student, staff, administrator
+    If they are not there, the -v did not take. Stop and redo step 1.
+
+
+-------------------------------------------------------------------------------
+STEP 2 - THE SERVICE           (new terminal)
+-------------------------------------------------------------------------------
+
+    cd service
+    npm start
+
+Check it is alive:
+
+    curl http://localhost:3000/health
+    -> {"status":"ok"}
+
+
+-------------------------------------------------------------------------------
+STEP 3 - THE WEB APPLICATION   (new terminal)
+-------------------------------------------------------------------------------
+
+    cd web
+    npm run dev
+
+    -> http://localhost:5173
+
+
+-------------------------------------------------------------------------------
+STEP 4 - A COURT YOU DO NOT MIND LOSING
+-------------------------------------------------------------------------------
+
+If A.9 passes, nothing is written and this is unnecessary. It is insurance
+for the case where it fails.
+
+Run from the service/ directory. Easiest is to put this in a file and run
+it, to avoid fighting shell quoting:
+
+    cd service
+    node db/apply.js --schema-only     (harmless; makes sure columns exist)
+
+Then create the target court. Save this as service/a9-target.js:
+
+    const pool = require("./src/store/db");
+    pool
+      .query(
+        "INSERT INTO courts (id,name,location,court_type,is_available,status) " +
+        "VALUES ('crt_a9target','A9 Target','Test','indoor',true,'active') " +
+        "ON CONFLICT (id) DO NOTHING"
+      )
+      .then(() => { console.log("crt_a9target ready"); return pool.end(); });
+
+    node a9-target.js
+
+
+===============================================================================
+THE ATTACKS
+===============================================================================
+
+Open http://localhost:5173 and sign in as:
+
+    username: student-a
+    password: password
+
+Notice there is no "Admin Courts" link in the navigation. That is the
+control being hidden. Everything below proves hiding is not refusing.
+
+Open the browser console (F12).
+
+
+-------------------------------------------------------------------------------
+ATTACK 0 - what is in the token
+-------------------------------------------------------------------------------
+
+    __badminton.scopes()
+
+EXPECT: a list WITHOUT courts:write
+        e.g. ["courts:read","bookings:read","bookings:write", ...]
+
+If courts:write IS there, the realm is not withholding it by role. Write
+that down - it changes what has to be fixed. Continue anyway.
+
+RESULT: ______________________________________________________
+
+
+-------------------------------------------------------------------------------
+ATTACK 1 - the hidden control, sent anyway
+-------------------------------------------------------------------------------
+
+    await __badminton.call("POST", "/courts/crt_a9target/retirement",
+      { reason: "from the console" }, { "If-Match": "*" })
+
+EXPECT: status 403
+        body type ending in /problems/insufficient-scope
+
+  403 = PASS. The service refused an operation the interface merely hid.
+  200 = FAIL CONDITION FOR THE WHOLE ASSIGNMENT. Stop and fix the backend.
+
+RESULT: ______________________________________________________
+
+
+-------------------------------------------------------------------------------
+ATTACK 2 - somebody else's object
+-------------------------------------------------------------------------------
+
+bkg_ownedByB is seeded as student-b's booking. You are student-a.
+
+    await __badminton.call("GET", "/bookings/bkg_ownedByB")
+
+EXPECT: status 404
+
+  404 = PASS. "Does not exist" and "not yours" are answered identically, so
+        nothing leaks about what other people have.
+  403 = FAIL. That tells the attacker the booking is real.
+  200 = FAIL. They just read another student's data.
+
+Also read the body: it must not say "you are not allowed to see this
+booking". That sentence leaks exactly what the 404 is hiding.
+
+RESULT: ______________________________________________________
+
+
+-------------------------------------------------------------------------------
+ATTACK 3 - the address bar
+-------------------------------------------------------------------------------
+
+Still signed in as student-a, type this straight into the address bar:
+
+    http://localhost:5173/admin/courts
+
+The PAGE will load with 200. That proves nothing at all - it is a static
+file server handing you the application's own files.
+
+WHAT YOU ACTUALLY EXAMINE IS THE NETWORK TAB.
+
+    [ ] Open DevTools -> Network, then reload the page
+    [ ] Find the API calls to localhost:3000
+    [ ] Each one that needs courts:write must come back 403
+    [ ] The screen must show the refusal, NOT a list of courts
+
+EXPECT: the refusal state from A.3, in domain terms.
+FAIL:   the page renders court data and management buttons.
+
+RESULT: ______________________________________________________
+
+
+===============================================================================
+AFTER
+===============================================================================
+
+[ ] Screenshot each console result and the Network tab. The README asks for
+    this evidence and the Session 7 demo requires the attack run live.
+
+[ ] Delete the throwaway court. Save as service/a9-clean.js:
+
+        const pool = require("./src/store/db");
+        pool
+          .query("DELETE FROM courts WHERE id='crt_a9target'")
+          .then(() => { console.log("cleaned"); return pool.end(); });
+
+        node a9-clean.js
+
+    Then delete a9-target.js and a9-clean.js - they are scratch files and
+    do not belong in the repository.
+
+[ ] Shut down:  Ctrl-C the three terminals, then
+    docker compose -f infra/docker-compose.auth.yml down
+
+
+-------------------------------------------------------------------------------
+IF ATTACK 1 RETURNS 200
+-------------------------------------------------------------------------------
+
+Do not panic and do not patch the client - hiding the button harder changes
+nothing, and the grader sends the request from the console.
+
+It means Keycloak issued courts:write to a student, so limiting the client
+scope to the administrator role is not enough on its own. The fix is in the
+service: the retirement handler must check the caller's role in addition to
+the scope, so that a token carrying a scope it should never have been given
+is still refused.
+
+That is a backend change of roughly twenty lines plus tests. Bring the
+result back to the team before making it - it changes the authorisation
+model recorded in docs/decisions/0003-autentikasi.md.
+
+
+-------------------------------------------------------------------------------
+QUICK REFERENCE
+-------------------------------------------------------------------------------
+
+Accounts (all password: password)
+    student-a, student-b    role: student        - no courts:write
+    admin-a,   admin-b      role: administrator  - has courts:write
+    staff-a,   staff-b      role: staff          - has bookings:fulfil
+
+Seeded courts
+    crt_51Fa93cD  Court 1  active
+    crt_72Kb14xP  Court 2  active
+    crt_93Lm27qR  Court 3  active, is_available=false
+
+Seeded bookings
+    bkg_ownedByA  student-a
+    bkg_ownedByB  student-b
+
+Console handle (web/src/lib/console-handle.js)
+    __badminton.token()     the raw access token
+    __badminton.scopes()    what it actually carries
+    __badminton.subject()   who the service thinks you are
+    __badminton.call(method, path, body, headers)
+
+Ports
+    8080  Keycloak
+    3000  service
+    5173  web
+
+What "pass" means
+    403  the caller is known and under-permitted
+    404  the object does not exist, OR is not yours - answered identically
+    200  the control was only hidden. This is the failure condition.

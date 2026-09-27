@@ -420,10 +420,18 @@ was available while they were made. After `docker compose -f
 infra/docker-compose.auth.yml up` and re-importing the realm, two checks
 matter:
 
-1. Sign in as `student-a` and read `window.__token` (or the Network tab).
-   The `scope` claim must **not** contain `courts:write`.
+1. Sign in as `student-a` and run `__badminton.scopes()` in the console.
+   The list must **not** contain `courts:write`.
 2. Run the A.9 console attack as `student-a`:
-   `POST /v1/courts/{id}/retirement` must answer **403**.
+
+   ```js
+   await __badminton.call(
+     "POST", "/courts/<an active court id>/retirement",
+     { reason: "from the console" }, { "If-Match": "*" }
+   )
+   ```
+
+   It must answer **403**.
 
 A 200 or a leaked scope in check 1 means the realm is not withholding the
 scope by role, and the service needs to check the role itself in addition to

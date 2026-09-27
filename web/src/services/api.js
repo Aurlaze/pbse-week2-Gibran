@@ -1,5 +1,6 @@
 import keycloak from "../auth/keycloak";
 import { Problem } from "../lib/problem";
+import { installConsoleHandle } from "../lib/console-handle";
 import {
   forgetAll,
   knownVersion,
@@ -124,6 +125,10 @@ async function request(path, options = {}) {
 }
 
 export { Problem };
+
+// A.9 — see lib/console-handle.js. Installed from here because this module
+// owns the base URL.
+installConsoleHandle(API_BASE_URL ?? "");
 
 // Reads. Each returns { data, etag, notModified }: the ETag travels with
 // the data because a write against it needs the version the user actually
