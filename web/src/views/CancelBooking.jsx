@@ -1,210 +1,419 @@
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
-import { cancelBooking, getBooking } from "../services/api";
+import {
+  cancelBooking,
+  getBooking,
+} from "../services/api";
+
 import { useAuth } from "../auth/AuthContext";
-import { useResource } from "../lib/useResource";
-import { SkeletonDetail } from "../components/Skeleton";
-import Field from "../components/Field";
 
-const REASON_MAX_LENGTH = 500;
+function formatDateTime(value) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      dateStyle: "long",
+      timeStyle: "short",
+    }
+  ).format(date);
+}
+
+function formatTimeRange(
+  startTime,
+  endTime
+) {
+  if (!startTime || !endTime) {
+    return "—";
+  }
+
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime())
+  ) {
+    return `${startTime} – ${endTime}`;
+  }
+
+  const startText =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      }
+    ).format(start);
+
+  const endText =
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      }
+    ).format(end);
+
+  return `${startText} – ${endText}`;
+}
 
 export default function CancelBooking() {
   const { bookingId } = useParams();
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // The booking is loaded rather than carried here in router state: this
-  // screen has an address of its own and must work when it is opened cold.
-  const { state, retry } = useResource(getBooking, bookingId);
+  const [booking, setBooking] =
+    useState(null);
 
-  const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [localError, setLocalError] = useState(null);
-  const [problem, setProblem] = useState(null);
+  const [etag, setEtag] =
+    useState(null);
 
-  // A.8 — set when somebody else got there first. Kept apart from
-  // `problem` because it is not a failure to apologise for: the booking
-  // simply moved on, and the user is being shown where it moved to.
-  const [overtaken, setOvertaken] = useState(false);
+  const [reason, setReason] =
+    useState("");
 
-  // No idempotency key: the contract makes this operation naturally
-  // idempotent. Cancelling an already-cancelled booking answers 200 with
-  // the existing cancellation rather than refusing, because the end state
-  // the caller asked for already holds.
+  const [loading, setLoading] =
+    useState(true);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState(null);
+
+  async function loadBooking() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result =
+        await getBooking(bookingId);
+
+      setBooking(
+        result?.data ?? result
+      );
+
+      setEtag(result?.etag ?? null);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadBooking();
+  }, [bookingId]);
+
   async function handleSubmit(event) {
     event.preventDefault();
 
-    setProblem(null);
-    setOvertaken(false);
+    const trimmedReason =
+      reason.trim();
 
-    if (reason.trim() === "") {
-      setLocalError("Say why the booking is being cancelled");
+    if (!trimmedReason) {
+      setError({
+        status: 400,
+        title:
+          "Please provide a reason for the cancellation.",
+      });
       return;
     }
 
-    setLocalError(null);
-    setSubmitting(true);
+    if (trimmedReason.length > 500) {
+      setError({
+        status: 400,
+        title:
+          "The cancellation reason must be 500 characters or fewer.",
+      });
+      return;
+    }
 
     try {
-      // A.8 — the write carries the version this screen was rendered from,
-      // so the service can refuse it if the booking moved on in the
-      // meantime. Without it the service has no basis for refusing, and a
-      // cancellation written on top of somebody else's would be lost
-      // silently.
-      await cancelBooking(bookingId, { reason: reason.trim() }, state.etag);
+      setSubmitting(true);
+      setError(null);
 
-      navigate(`/bookings/${bookingId}`);
-    } catch (refusal) {
-      if (refusal.isConflict) {
-        // Not an error banner. Somebody else got there first, nothing was
-        // changed, and the current data is fetched so the user can see
-        // what actually happened before deciding anything.
-        setOvertaken(true);
-        await retry();
+      await cancelBooking(
+        bookingId,
+        {
+          reason: trimmedReason,
+        },
+        etag
+      );
 
+      navigate(
+        `/bookings/${bookingId}`,
+        {
+          replace: true,
+        }
+      );
+    } catch (err) {
+      /*
+       * 412 means the representation changed
+       * since we loaded it.
+       *
+       * Reload the booking so the user does not
+       * cancel using an old ETag.
+       */
+      if (err.status === 412) {
+        setError({
+          status: 412,
+          title:
+            "This booking changed while you were viewing it. Please review it again.",
+        });
+
+        await loadBooking();
         return;
       }
 
-      setProblem(refusal);
+      setError(err);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (state.kind === "loading") {
+  if (loading) {
     return (
       <main>
-        <h1>Cancel booking</h1>
-        <SkeletonDetail label="Loading booking" />
-      </main>
-    );
-  }
-
-  if (state.kind === "error" || problem?.status === 401 || problem?.status === 403) {
-    const status = problem?.status ?? state.problem.status;
-
-    if (status === 401) {
-      return (
-        <main>
-          <h1>Cancel booking</h1>
-
-          <p>Your session has expired. Please sign in again to continue.</p>
-
-          <button onClick={login}>Sign in</button>
-        </main>
-      );
-    }
-
-    if (status === 403) {
-      return (
-        <main>
-          <h1>Cancel booking</h1>
-
-          <p>Your account is not permitted to cancel this booking.</p>
-
-          <p>
-            <Link to="/bookings">Back to bookings</Link>
-          </p>
-        </main>
-      );
-    }
-
-    // A.3 — the same answer for "no such booking" and "not yours".
-    if (status === 404) {
-      return (
-        <main>
-          <h1>Booking not found</h1>
-
-          <p>The requested booking could not be found.</p>
-
-          <Link to="/bookings">Back to bookings</Link>
-        </main>
-      );
-    }
-
-    return (
-      <main>
-        <h1>Cancel booking</h1>
-
-        <p>We could not load this booking right now. Nothing was changed.</p>
-
-        <button onClick={retry}>Retry</button>
-      </main>
-    );
-  }
-
-  const booking = state.data;
-
-  if (booking.status === "cancelled") {
-    return (
-      <main>
-        <h1>Already cancelled</h1>
-
-        <p>This booking has already been cancelled. Nothing further is needed.</p>
+        <h1>Cancel Booking</h1>
 
         <p>
-          <Link to={`/bookings/${bookingId}`}>Back to the booking</Link>
+          Loading booking...
         </p>
       </main>
     );
   }
 
-  const fieldError = problem?.fieldReason("reason") ?? localError;
+  if (error?.status === 401) {
+    return (
+      <main>
+        <h1>Cancel Booking</h1>
 
-  // A refusal naming no field is about the request as a whole.
-  const formProblem = problem && !problem.hasFieldReasons ? problem : null;
+        <p>
+          Your session has expired.
+          Please sign in again.
+        </p>
+
+        <button onClick={login}>
+          Sign in
+        </button>
+      </main>
+    );
+  }
+
+  if (error?.status === 403) {
+    return (
+      <main>
+        <h1>Cancel Booking</h1>
+
+        <p>
+          You do not have permission to
+          cancel this booking.
+        </p>
+
+        <Link to="/bookings">
+          Back to bookings
+        </Link>
+      </main>
+    );
+  }
+
+  if (error?.status === 404) {
+    return (
+      <main>
+        <h1>Booking not found</h1>
+
+        <p>
+          The requested booking could
+          not be found.
+        </p>
+
+        <Link to="/bookings">
+          Back to bookings
+        </Link>
+      </main>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <main>
+        <h1>Booking not found</h1>
+
+        <p>
+          The requested booking could
+          not be found.
+        </p>
+
+        <Link to="/bookings">
+          Back to bookings
+        </Link>
+      </main>
+    );
+  }
+
+  /*
+   * If the booking is already cancelled,
+   * there is nothing left to cancel.
+   */
+  if (booking.status === "cancelled") {
+    return (
+      <main>
+        <h1>Booking Already Cancelled</h1>
+
+        <p>
+          This booking has already been
+          cancelled.
+        </p>
+
+        <p>
+          <strong>Date:</strong>{" "}
+          {formatDateTime(
+            booking.startTime
+          )}
+        </p>
+
+        <p>
+          <strong>Time:</strong>{" "}
+          {formatTimeRange(
+            booking.startTime,
+            booking.endTime
+          )}
+        </p>
+
+        <p>
+          <Link
+            to={`/bookings/${booking.id}`}
+          >
+            View booking
+          </Link>
+        </p>
+      </main>
+    );
+  }
+
+  if (booking.status !== "confirmed") {
+    return (
+      <main>
+        <h1>Cannot Cancel Booking</h1>
+
+        <p>
+          This booking is currently
+          <strong>
+            {" "}
+            {booking.status}
+          </strong>
+          .
+        </p>
+
+        <p>
+          <Link
+            to={`/bookings/${booking.id}`}
+          >
+            Back to booking
+          </Link>
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main>
-      <h1>Cancel booking {booking.id}</h1>
+      <h1>Cancel Booking</h1>
 
-      {booking.startTime && <p>Start: {booking.startTime}</p>}
-      {booking.endTime && <p>End: {booking.endTime}</p>}
+      <section>
+        <p>
+          <strong>Date:</strong>{" "}
+          {formatDateTime(
+            booking.startTime
+          )}
+        </p>
 
-      {overtaken && (
-        <section className="form-notice" role="status">
+        <p>
+          <strong>Time:</strong>{" "}
+          {formatTimeRange(
+            booking.startTime,
+            booking.endTime
+          )}
+        </p>
+
+        <p>
+          <strong>Status:</strong>{" "}
+          {booking.status}
+        </p>
+      </section>
+
+      {error && (
+        <section>
           <p>
-            This booking was already handled by somebody else while this page
-            was open — another window, or another device signed in as you.
-            Nothing you typed was saved, and the booking is shown below as it
-            stands now.
+            {error.detail ||
+              error.title ||
+              "We could not cancel the booking."}
           </p>
         </section>
       )}
 
-      {formProblem && (
-        <section className="form-problem" role="alert">
-          <p>{formProblem.sentence}</p>
-        </section>
-      )}
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label htmlFor="reason">
+            Cancellation reason
+          </label>
 
-      <form onSubmit={handleSubmit} noValidate>
-        <Field
-          name="reason"
-          label="Why are you cancelling?"
-          error={fieldError}
-          hint={`Up to ${REASON_MAX_LENGTH} characters. The court is released for others once cancelled.`}
+          <br />
+
+          <textarea
+            id="reason"
+            name="reason"
+            value={reason}
+            onChange={(event) => {
+              setReason(
+                event.target.value
+              );
+              setError(null);
+            }}
+            maxLength={500}
+            rows={4}
+            placeholder="Why are you cancelling this booking?"
+            disabled={submitting}
+          />
+
+          <p>
+            {reason.length}/500
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          disabled={
+            submitting ||
+            !reason.trim()
+          }
         >
-          {(props) => (
-            <textarea
-              {...props}
-              rows={3}
-              maxLength={REASON_MAX_LENGTH}
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              disabled={submitting}
-            />
-          )}
-        </Field>
-
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Cancelling…" : "Cancel this booking"}
+          {submitting
+            ? "Cancelling..."
+            : "Confirm cancellation"}
         </button>
       </form>
 
       <p>
-        <Link to={`/bookings/${bookingId}`}>Keep the booking</Link>
+        <Link
+          to={`/bookings/${booking.id}`}
+        >
+          Keep booking
+        </Link>
       </p>
     </main>
   );

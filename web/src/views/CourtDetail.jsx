@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { getCourt } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
@@ -32,7 +31,9 @@ export default function CourtDetail() {
         <main>
           <h1>Court</h1>
 
-          <p>Your session has expired. Please sign in again to continue.</p>
+          <p>
+            Your session has expired. Please sign in again to continue.
+          </p>
 
           <button onClick={login}>Sign in</button>
         </main>
@@ -44,7 +45,10 @@ export default function CourtDetail() {
         <main>
           <h1>Court</h1>
 
-          <p>You are signed in, but you do not have permission to view this court.</p>
+          <p>
+            You are signed in, but you do not have permission to view this
+            court.
+          </p>
 
           <p>
             <Link to="/courts">Back to courts</Link>
@@ -72,7 +76,9 @@ export default function CourtDetail() {
       <main>
         <h1>Court</h1>
 
-        <p>We could not load this court right now. Nothing was changed.</p>
+        <p>
+          We could not load this court right now. Nothing was changed.
+        </p>
 
         <button onClick={retry}>Retry</button>
 
@@ -84,8 +90,7 @@ export default function CourtDetail() {
   }
 
   // A single object has no empty state: it is either found or it is a 404,
-  // handled above. `empty` here would mean the service answered 200 with no
-  // body, which the contract does not allow.
+  // handled above.
   const court = state.data;
 
   return (
@@ -97,6 +102,16 @@ export default function CourtDetail() {
       <p>Status: {court.status}</p>
 
       {court.description && <p>{court.description}</p>}
+
+      {court.status !== "retired" && court.isAvailable !== false && (
+        <p>
+          <Link
+            to={`/bookings/new?courtId=${encodeURIComponent(court.id)}`}
+          >
+            Book this court
+          </Link>
+        </p>
+      )}
 
       <p>
         <Link to="/courts">Back to courts</Link>

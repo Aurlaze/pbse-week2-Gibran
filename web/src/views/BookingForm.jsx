@@ -1,244 +1,637 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import { createBooking, listCourts } from "../services/api";
 import { useAuth } from "../auth/AuthContext";
-import { useResource } from "../lib/useResource";
-import { SkeletonDetail } from "../components/Skeleton";
-import Field from "../components/Field";
 
-// A datetime-local input gives "2026-09-27T14:30" — no seconds, no offset.
-// The contract wants RFC 3339, so the browser's own zone is applied here.
-// Sending the raw value would be refused by the service for a reason the
-// user cannot see and did not cause.
-function toRfc3339(localValue) {
-  if (!localValue) {
-    return null;
-  }
+const OPEN_HOUR = 8;
+const CLOSE_HOUR = 22;
 
-  const parsed = new Date(localValue);
+function formatHour(hour) {
+  const date = new Date(2000, 0, 1, hour, 0);
 
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
-// A.6 item 2 — this is user experience, and it guarantees nothing. Every
-// rule below is enforced again by the service, which is the only place a
-// rule actually holds. The value here is that the user finds out now
-// rather than after a round trip.
-function checkLocally({ courtId, startTime, endTime }) {
-  const errors = {};
+function formatDateForInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-  if (!courtId) {
-    errors.courtId = "Choose a court";
+  return `${year}-${month}-${day}`;
+}
+
+function toApiDateTime(dateString, hour) {
+  const [year, month, day] = dateString
+    .split("-")
+    .map(Number);
+
+  const date = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    0,
+    0,
+    0
+  );
+
+  return date.toISOString();
+}
+
+function getCollectionData(result) {
+  const body = result?.data;
+
+  if (Array.isArray(body)) {
+    return body;
   }
 
-  if (!startTime) {
-    errors.startTime = "Give a start date and time";
+  return body?.items ?? [];
+}
+
+function getCourtLabel(court) {
+  if (!court?.name) {
+    return "Unknown court";
   }
 
-  if (!endTime) {
-    errors.endTime = "Give an end date and time";
-  }
+  return court.name.replace(/^Court\s+/i, "");
+}
 
-  if (startTime && endTime && Date.parse(endTime) <= Date.parse(startTime)) {
-    errors.endTime = "The end time must be after the start time";
-  }
-
-  return errors;
+function isSameLocalDate(dateString, date) {
+  return (
+    dateString === formatDateForInput(date)
+  );
 }
 
 export default function BookingForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
+  const requestedCourtId =
+    searchParams.get("courtId");
+
+  const [courts, setCourts] = useState([]);
   const [courtId, setCourtId] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
 
-  const [submitting, setSubmitting] = useState(false);
-  const [localErrors, setLocalErrors] = useState({});
-  const [problem, setProblem] = useState(null);
+  const [bookingDate, setBookingDate] = useState(
+    formatDateForInput(new Date())
+  );
 
-  // The court list fills the picker. Free text would invite a 422 for a
-  // court that does not exist, when the set of courts is knowable.
-  const courts = useResource(listCourts, "", {
-    collection: true,
-    select: (body) => body.items ?? body,
-  });
+  const [selectedHour, setSelectedHour] =
+    useState(null);
 
-  // A.6 item 3 — the idempotency key is the guarantee; the disabled button
-  // is only prevention. The key identifies *this booking attempt*, so it is
-  // generated once and kept: pressing submit again after a failure is the
-  // same intent and must not create a second booking. Editing any field
-  // makes it a different request, and the service answers a reused key
-  // carrying a different body with 409, so the key is renewed below.
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const [now, setNow] = useState(
+    new Date()
+  );
 
+  const [loadingCourts, setLoadingCourts] =
+    useState(true);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] = useState(null);
+
+  /*
+   * Keep the current time updated while the user
+   * has the booking page open.
+   *
+   * This means a slot can automatically become
+   * unavailable while the page is still open.
+   */
   useEffect(() => {
-    idempotencyKey.current = crypto.randomUUID();
-  }, [courtId, startTime, endTime]);
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 30_000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  /*
+   * Load courts.
+   *
+   * If the user came from:
+   *
+   * /courts/{courtId}
+   *
+   * then requestedCourtId is used to pre-select
+   * that court.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCourts() {
+      try {
+        setLoadingCourts(true);
+        setError(null);
+
+        const result = await listCourts();
+        const items = getCollectionData(result);
+
+        if (cancelled) {
+          return;
+        }
+
+        const availableCourts = items.filter(
+          (court) =>
+            court.status === "active" &&
+            court.isAvailable !== false
+        );
+
+        setCourts(availableCourts);
+
+        if (availableCourts.length > 0) {
+          const requestedCourt =
+            availableCourts.find(
+              (court) =>
+                court.id === requestedCourtId
+            );
+
+          setCourtId(
+            requestedCourt?.id ||
+              availableCourts[0].id
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCourts(false);
+        }
+      }
+    }
+
+    loadCourts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedCourtId]);
+
+  /*
+   * Determine which slots are unavailable.
+   *
+   * Rules:
+   *
+   * 1. A date before today -> every slot disabled.
+   * 2. Today -> any slot whose START time has
+   *    already passed is disabled.
+   * 3. Future date -> all slots are available.
+   */
+  const slotAvailability = useMemo(() => {
+    const selectedDate = new Date(
+      `${bookingDate}T00:00:00`
+    );
+
+    if (Number.isNaN(selectedDate.getTime())) {
+      return {};
+    }
+
+    const today = formatDateForInput(now);
+
+    const selectedDateOnly =
+      new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      );
+
+    const todayOnly =
+      new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+
+    if (selectedDateOnly < todayOnly) {
+      return Object.fromEntries(
+        Array.from(
+          {
+            length: CLOSE_HOUR - OPEN_HOUR,
+          },
+          (_, index) => [
+            OPEN_HOUR + index,
+            false,
+          ]
+        )
+      );
+    }
+
+    if (!isSameLocalDate(bookingDate, now)) {
+      return Object.fromEntries(
+        Array.from(
+          {
+            length: CLOSE_HOUR - OPEN_HOUR,
+          },
+          (_, index) => [
+            OPEN_HOUR + index,
+            true,
+          ]
+        )
+      );
+    }
+
+    const result = {};
+
+    for (
+      let hour = OPEN_HOUR;
+      hour < CLOSE_HOUR;
+      hour += 1
+    ) {
+      /*
+       * A slot becomes unavailable as soon as
+       * its start time has passed.
+       *
+       * Example:
+       * current time = 21:30
+       *
+       * 20:00–21:00 -> unavailable
+       * 21:00–22:00 -> unavailable
+       */
+      const slotStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        hour,
+        0,
+        0,
+        0
+      );
+
+      result[hour] = slotStart > now;
+    }
+
+    return result;
+  }, [bookingDate, now]);
+
+  /*
+   * If the selected slot becomes unavailable
+   * while the page is open, automatically clear it.
+   */
+  useEffect(() => {
+    if (
+      selectedHour !== null &&
+      slotAvailability[selectedHour] === false
+    ) {
+      setSelectedHour(null);
+    }
+  }, [selectedHour, slotAvailability]);
+
+  function handleDateChange(event) {
+    setBookingDate(event.target.value);
+    setSelectedHour(null);
+    setError(null);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const found = checkLocally({ courtId, startTime, endTime });
-
-    setLocalErrors(found);
-    setProblem(null);
-
-    if (Object.keys(found).length > 0) {
+    if (!courtId) {
+      setError({
+        status: 400,
+        title: "Please select a court.",
+      });
       return;
     }
 
-    setSubmitting(true);
+    if (!bookingDate) {
+      setError({
+        status: 400,
+        title: "Please select a date.",
+      });
+      return;
+    }
+
+    if (selectedHour === null) {
+      setError({
+        status: 400,
+        title:
+          "Please select a one-hour time slot.",
+      });
+      return;
+    }
+
+    /*
+     * Final client-side check before sending.
+     *
+     * The backend remains the final authority.
+     */
+    if (slotAvailability[selectedHour] === false) {
+      setError({
+        status: 400,
+        title:
+          "That time slot has already started. Please choose another slot.",
+      });
+      setSelectedHour(null);
+      return;
+    }
 
     try {
-      const { data: booking } = await createBooking(
-        {
-          courtId,
-          startTime: toRfc3339(startTime),
-          endTime: toRfc3339(endTime),
-        },
-        idempotencyKey.current
+      setLoading(true);
+      setError(null);
+
+      const startTime = toApiDateTime(
+        bookingDate,
+        selectedHour
       );
 
-      navigate(booking?.id ? `/bookings/${booking.id}` : "/bookings");
-    } catch (refusal) {
-      setProblem(refusal);
+      const endTime = toApiDateTime(
+        bookingDate,
+        selectedHour + 1
+      );
+
+      const idempotencyKey =
+        crypto.randomUUID();
+
+      const result = await createBooking(
+        {
+          courtId,
+          startTime,
+          endTime,
+        },
+        idempotencyKey
+      );
+
+      const booking =
+        result?.data ?? result;
+
+      if (booking?.id) {
+        navigate(
+          `/bookings/${booking.id}`
+        );
+      } else {
+        navigate("/bookings");
+      }
+    } catch (err) {
+      setError(err);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   }
 
-  // A.3 — a session that has run out is not a form problem.
-  if (problem?.status === 401) {
+  if (error?.status === 401) {
     return (
       <main>
-        <h1>Create a booking</h1>
+        <h1>Create Booking</h1>
 
-        <p>Your session has expired. Please sign in again to continue.</p>
+        <p>
+          Your session has expired. Please sign in
+          again.
+        </p>
 
-        <button onClick={login}>Sign in</button>
+        <button
+          type="button"
+          onClick={login}
+        >
+          Sign in
+        </button>
       </main>
     );
   }
 
-  if (problem?.status === 403) {
+  if (error?.status === 403) {
     return (
       <main>
-        <h1>Create a booking</h1>
-
-        <p>Your account is not permitted to create bookings.</p>
+        <h1>Create Booking</h1>
 
         <p>
-          <Link to="/bookings">Back to bookings</Link>
+          You do not have permission to create a
+          booking.
+        </p>
+
+        <p>
+          <Link to="/courts">
+            Back to courts
+          </Link>
         </p>
       </main>
     );
   }
 
-  // The message for a field: what the service said about it, or what was
-  // caught here before sending. The service wins — it knows the rule.
-  const reasonFor = (name) => problem?.fieldReason(name) ?? localErrors[name];
+  if (loadingCourts) {
+    return (
+      <main>
+        <h1>Create Booking</h1>
 
-  // A refusal that names no field is about the request as a whole: an
-  // overlapping slot, a retired court, an unusable pair of times. A.6 puts
-  // those at the level of the form.
-  const formProblem =
-    problem && !problem.hasFieldReasons && ![401, 403].includes(problem.status)
-      ? problem
-      : null;
+        <p>Loading courts...</p>
+      </main>
+    );
+  }
+
+  if (error && !error.status) {
+    return (
+      <main>
+        <h1>Create Booking</h1>
+
+        <p>
+          {error.detail ||
+            error.title ||
+            "We could not load the booking form."}
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            window.location.reload()
+          }
+        >
+          Retry
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main>
-      <h1>Create a booking</h1>
+      <h1>Create Booking</h1>
 
-      {formProblem && (
-        <section className="form-problem" role="alert">
-          <p>{formProblem.sentence}</p>
-
-          {formProblem.status === 404 && (
-            <p>
-              <Link to="/courts">Back to the court list</Link>
-            </p>
-          )}
+      {error && (
+        <section>
+          <p>
+            {error.status === 409
+              ? "This time slot is no longer available. Please choose another slot."
+              : error.detail ||
+                error.title ||
+                "We could not create the booking."}
+          </p>
         </section>
       )}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <Field
-          name="courtId"
-          label="Court"
-          error={reasonFor("courtId")}
-          hint={courts.state.kind === "empty" ? "No courts are available." : null}
-        >
-          {(props) =>
-            courts.state.kind === "loading" ? (
-              <SkeletonDetail label="Loading courts" />
-            ) : (
-              <select
-                {...props}
-                value={courtId}
-                onChange={(event) => setCourtId(event.target.value)}
-                disabled={submitting}
-              >
-                <option value="">Choose a court…</option>
-
-                {courts.state.kind === "content" &&
-                  courts.state.data
-                    .filter((court) => court.status !== "retired")
-                    .map((court) => (
-                      <option key={court.id} value={court.id}>
-                        {court.name}
-                      </option>
-                    ))}
-              </select>
-            )
-          }
-        </Field>
-
-        {courts.state.kind === "error" && (
-          <p className="field-error">
-            The court list could not be loaded.{" "}
-            <button type="button" onClick={courts.retry}>
-              Retry
-            </button>
+      {courts.length === 0 ? (
+        <section>
+          <p>
+            No courts are currently available for
+            booking.
           </p>
-        )}
 
-        <Field name="startTime" label="Start time" error={reasonFor("startTime")}>
-          {(props) => (
+          <p>
+            <Link to="/courts">
+              Back to courts
+            </Link>
+          </p>
+        </section>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="courtId">
+              Court
+            </label>
+
+            <select
+              id="courtId"
+              name="courtId"
+              value={courtId}
+              onChange={(event) => {
+                setCourtId(
+                  event.target.value
+                );
+                setError(null);
+              }}
+              disabled={loading}
+            >
+              {courts.map((court) => (
+                <option
+                  key={court.id}
+                  value={court.id}
+                >
+                  Court{" "}
+                  {getCourtLabel(court)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="bookingDate">
+              Date
+            </label>
+
             <input
-              {...props}
-              type="datetime-local"
-              value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
-              disabled={submitting}
+              id="bookingDate"
+              name="bookingDate"
+              type="date"
+              value={bookingDate}
+              min={formatDateForInput(
+                new Date()
+              )}
+              onChange={handleDateChange}
+              disabled={loading}
             />
-          )}
-        </Field>
+          </div>
 
-        <Field name="endTime" label="End time" error={reasonFor("endTime")}>
-          {(props) => (
-            <input
-              {...props}
-              type="datetime-local"
-              value={endTime}
-              onChange={(event) => setEndTime(event.target.value)}
-              disabled={submitting}
-            />
-          )}
-        </Field>
+          <div>
+            <p>
+              <strong>
+                Choose a 1-hour time slot
+              </strong>
+            </p>
 
-        {/* Disabled while the request is in flight. Prevention, not the
-            guarantee — the idempotency key above is the guarantee. */}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Creating booking…" : "Create booking"}
-        </button>
-      </form>
+            <p>
+              Opening hours: 8:00 AM – 10:00 PM
+            </p>
+
+            <div>
+              {Array.from(
+                {
+                  length:
+                    CLOSE_HOUR - OPEN_HOUR,
+                },
+                (_, index) =>
+                  OPEN_HOUR + index
+              ).map((hour) => {
+                const available =
+                  slotAvailability[hour] !==
+                  false;
+
+                const selected =
+                  selectedHour === hour;
+
+                return (
+                  <button
+                    key={hour}
+                    type="button"
+                    onClick={() => {
+                      if (!available) {
+                        return;
+                      }
+
+                      setSelectedHour(hour);
+                      setError(null);
+                    }}
+                    disabled={
+                      loading || !available
+                    }
+                    aria-pressed={selected}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      marginBottom:
+                        "8px",
+                      padding: "10px",
+                      fontWeight: selected
+                        ? "bold"
+                        : "normal",
+                      opacity: available
+                        ? 1
+                        : 0.45,
+                    }}
+                  >
+                    {formatHour(hour)} –{" "}
+                    {formatHour(hour + 1)}
+                    {!available
+                      ? " — unavailable"
+                      : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedHour !== null && (
+            <p>
+              <strong>
+                Selected:
+              </strong>{" "}
+              {formatHour(selectedHour)} –{" "}
+              {formatHour(
+                selectedHour + 1
+              )}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              !courtId ||
+              !bookingDate ||
+              selectedHour === null ||
+              slotAvailability[
+                selectedHour
+              ] === false
+            }
+          >
+            {loading
+              ? "Creating booking..."
+              : "Create booking"}
+          </button>
+        </form>
+      )}
 
       <p>
-        <Link to="/bookings">Back to bookings</Link>
+        <Link to="/bookings">
+          Back to bookings
+        </Link>
       </p>
     </main>
   );

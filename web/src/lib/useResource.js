@@ -72,9 +72,15 @@ export function useResource(
         // The API layer answers with { data, etag, notModified }. A fetcher
         // that returns something else is taken at face value.
         const envelope =
-          result && typeof result === "object" && "notModified" in result
+          result &&
+          typeof result === "object" &&
+          "notModified" in result
             ? result
-            : { data: result, etag: null, notModified: false };
+            : {
+                data: result,
+                etag: null,
+                notModified: false,
+              };
 
         const body = selectRef.current
           ? selectRef.current(envelope.data)
@@ -84,9 +90,13 @@ export function useResource(
         // data stands and the stale marker is cleared; fetchedAt moves,
         // because the service has just confirmed this version is current.
         setState(
-          collection && Array.isArray(body) && body.length === 0
+          collection &&
+            Array.isArray(body) &&
+            body.length === 0
             ? empty()
-            : content(body, { etag: envelope.etag })
+            : content(body, {
+                etag: envelope.etag,
+              })
         );
       } catch (problem) {
         if (mine !== generation.current) {
@@ -138,6 +148,12 @@ export function useResource(
   }, [load, pollMs]);
 
   return {
+    // IMPORTANT:
+    // Views such as Courts.jsx use:
+    //
+    // const { state, retry } = useResource(...)
+    //
+    // so state must be exposed here.
     state,
 
     // The manual retry control the error state must offer.
